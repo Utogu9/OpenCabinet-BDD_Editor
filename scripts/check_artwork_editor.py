@@ -13,7 +13,7 @@ from editor_store import encode_import
 
 def run():
     with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary)
+        root = Path(temporary).resolve()
         imported = root/'new.png'
         Image.new('RGBA', (32, 24), (15, 40, 240, 180)).save(imported)
         original = root/'original.png'

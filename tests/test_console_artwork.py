@@ -16,7 +16,7 @@ class ConsoleArtworkTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         self.output = self.root/'generated/Console'
         self.output.mkdir(parents=True)
         self.catalog = b'{"schema_version":2,"system":"Console","status":"complete","games":{}}'

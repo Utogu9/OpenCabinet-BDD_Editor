@@ -32,7 +32,7 @@ def inside(path, base):
             break
         if parent.exists() and is_link(parent):
             raise ValueError('No se permiten enlaces en las rutas de edición')
-    return path
+    return path.resolve()
 
 
 def atomic_bytes(path, data):
