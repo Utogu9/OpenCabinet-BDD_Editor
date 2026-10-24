@@ -1,0 +1,593 @@
+"""Desktop artwork browser/editor. Run with Run-Editor.cmd."""
+import argparse
+from concurrent.futures import ThreadPoolExecutor
+import json
+import os
+from pathlib import Path
+import re
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+import unicodedata
+
+from PIL import Image, ImageTk
+from editor_store import ArtworkStore, encode_import, inside
+from console_artwork import ConsoleArtwork, CONSOLE_KINDS
+from editor_common import ROOT, settings_path, write_json
+
+KINDS = {'cover_front': 'Carátula frontal', 'cover_back': 'Carátula trasera', 'cover_full': 'Carátula completa',
+         'poster_front': 'Póster frontal', 'poster_back': 'Póster trasero',
+         'spine': 'Lomo', 'disc': 'Disco', 'cartridge': 'Cartucho', 'logo': 'Logo',
+         'screenshot': 'Captura', 'title_screen': 'Pantalla de título',
+         'banner': 'Banner', 'fanart': 'Ilustración', 'manual': 'Manual PDF'}
+BG, PANEL, TEXT, MUTED, ACCENT = '#131820', '#1e2632', '#edf2f7', '#a6b4c5', '#54d6be'
+
+
+def search_key(value):
+    return ''.join(c for c in unicodedata.normalize('NFKD', value.casefold()) if not unicodedata.combining(c))
+
+
+def game_titles(game):
+    return list(dict.fromkeys(e['name'] for e in game.get('entries', []) if e.get('name')))
+
+
+class Editor:
+    def __init__(self, window, root=ROOT, include_samples=False, library=None):
+        if library is None:
+            self.store = ArtworkStore(root)
+        else:
+            from editor_location import LocatedArtworkStore
+            self.store = LocatedArtworkStore(library)
+        self.window = window
+        self.console_store = ConsoleArtwork(self.store)
+        self.console_mode = False
+        self.samples = include_samples
+        self.pool = ThreadPoolExecutor(max_workers=2)
+        self.closed = False
+        self.busy = False
+        self.current_output = self.catalog = self.serial = None
+        self.games, self.rows, self.photos = {}, {}, []
+        self.action_buttons = []
+        self.filter_timer = None
+        self.generation = 0
+        self.window.title('OpenCabinet · Editor de imágenes')
+        self.window.geometry('1320x860')
+        self.window.minsize(1000, 650)
+        self.window.configure(bg=BG)
+        self.window.protocol('WM_DELETE_WINDOW', self.close)
+        self.style()
+        self.build()
+        self.refresh_libraries()
+        self.poll_status()
+
+    def style(self):
+        s = ttk.Style(self.window)
+        s.theme_use('clam')
+        s.configure('.', background=BG, foreground=TEXT, font=('Segoe UI', 10))
+        s.configure('TFrame', background=BG)
+        s.configure('TLabel', background=BG, foreground=TEXT)
+        s.configure('Muted.TLabel', foreground=MUTED)
+        s.configure('Heading.TLabel', font=('Segoe UI Semibold', 21))
+        s.configure('TEntry', fieldbackground=PANEL, foreground=TEXT, insertcolor=TEXT, padding=7)
+        s.configure('TCombobox', fieldbackground=PANEL, background=PANEL, foreground=TEXT, padding=6)
+        s.map('TCombobox', fieldbackground=[('readonly', PANEL)], foreground=[('readonly', TEXT)])
+        s.configure('TButton', background=PANEL, foreground=TEXT, padding=(12, 8), borderwidth=0)
+        s.map('TButton', background=[('active', '#334356')], foreground=[('disabled', '#64748b')])
+        s.configure('Accent.TButton', background=ACCENT, foreground='#11221f')
+        s.map('Accent.TButton', background=[('active', '#8ee8d6')])
+        s.configure('Treeview', background=PANEL, fieldbackground=PANEL, foreground=TEXT,
+                    rowheight=30, borderwidth=0)
+        s.map('Treeview', background=[('selected', '#345469')])
+        s.configure('Treeview.Heading', background=BG, foreground=MUTED)
+
+    def build(self):
+        top = ttk.Frame(self.window, padding=(22, 18))
+        top.pack(fill='x')
+        ttk.Label(top, text='OpenCabinet', style='Heading.TLabel').pack(side='left')
+        ttk.Label(top, text='  /  Biblioteca de imágenes', style='Muted.TLabel').pack(side='left', pady=8)
+        ttk.Button(top, text='Actualizar biblioteca', command=self.refresh_libraries).pack(side='right')
+        self.status = tk.StringVar(value='Leyendo biblioteca…')
+        ttk.Label(self.window, textvariable=self.status, style='Muted.TLabel', padding=(24, 0, 24, 12)).pack(fill='x')
+        paned = ttk.Panedwindow(self.window, orient='horizontal')
+        paned.pack(fill='both', expand=True, padx=20, pady=(0, 18))
+        left = ttk.Frame(paned, padding=(0, 0, 16, 0))
+        right = ttk.Frame(paned)
+        paned.add(left, weight=1)
+        paned.add(right, weight=3)
+        ttk.Label(left, text='CONSOLA / BIBLIOTECA', style='Muted.TLabel').pack(anchor='w', pady=(0, 7))
+        self.console_filter = tk.StringVar()
+        ttk.Entry(left, textvariable=self.console_filter).pack(fill='x', pady=(0, 8))
+        self.console_filter.trace_add('write', lambda *_: self.filter_libraries())
+        self.library_name = tk.StringVar()
+        self.library_box = ttk.Combobox(left, textvariable=self.library_name, state='readonly', width=40)
+        self.library_box.pack(fill='x')
+        self.library_box.bind('<<ComboboxSelected>>', lambda _: self.load_library())
+        ttk.Button(left, text='Imágenes de la consola', command=self.show_console).pack(fill='x', pady=(8, 0))
+        ttk.Label(left, text='BUSCAR JUEGO O SERIAL', style='Muted.TLabel').pack(anchor='w', pady=(20, 7))
+        self.query = tk.StringVar()
+        self.search_entry = ttk.Entry(left, textvariable=self.query)
+        self.search_entry.pack(fill='x')
+        self.query.trace_add('write', self.schedule_filter)
+        self.count = tk.StringVar()
+        ttk.Label(left, textvariable=self.count, style='Muted.TLabel').pack(anchor='w', pady=8)
+        tree_frame = ttk.Frame(left)
+        tree_frame.pack(fill='both', expand=True)
+        self.tree = ttk.Treeview(tree_frame, columns=('serial',), show='tree headings', selectmode='browse')
+        self.tree.heading('#0', text='Juego')
+        self.tree.heading('serial', text='ID')
+        self.tree.column('#0', width=285)
+        self.tree.column('serial', width=115)
+        scrollbar = ttk.Scrollbar(tree_frame, orient='vertical', command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        self.tree.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+        self.tree.bind('<<TreeviewSelect>>', lambda _: self.select_game())
+        self.title = ttk.Label(right, text='Elegí un juego', style='Heading.TLabel', wraplength=760)
+        self.title.pack(anchor='w', pady=(0, 6))
+        self.details = ttk.Label(right, text='Buscá por nombre, región o identificador.', style='Muted.TLabel', wraplength=760)
+        self.details.pack(anchor='w', pady=(0, 12))
+        extra = ttk.Frame(right)
+        extra.pack(fill='x', pady=(0, 12))
+        ttk.Label(extra, text='Añadir tipo:').pack(side='left', padx=(0, 8))
+        self.kind = tk.StringVar(value='cover_back')
+        self.kind_box = ttk.Combobox(extra, textvariable=self.kind, values=list(KINDS), width=20)
+        self.kind_box.pack(side='left')
+        self.add_button = ttk.Button(extra, text='Importar imagen', style='Accent.TButton', command=self.import_kind)
+        self.add_button.pack(side='left', padx=8)
+        self.undo_button = ttk.Button(extra, text='Deshacer cambio', command=self.undo)
+        self.undo_button.pack(side='right')
+        self.window.bind('<Control-f>', lambda _: self.search_entry.focus_set())
+        self.window.bind('<Control-o>', lambda _: self.import_kind())
+        self.window.bind('<F5>', lambda _: self.refresh_libraries())
+        self.note = ttk.Label(right, text='', style='Muted.TLabel', wraplength=760)
+        self.note.pack(anchor='w', pady=(0, 10))
+        canvas_frame = ttk.Frame(right)
+        canvas_frame.pack(fill='both', expand=True)
+        self.canvas = tk.Canvas(canvas_frame, bg=BG, highlightthickness=0)
+        scroll = ttk.Scrollbar(canvas_frame, orient='vertical', command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=scroll.set)
+        self.canvas.pack(side='left', fill='both', expand=True)
+        scroll.pack(side='right', fill='y')
+        self.cards = ttk.Frame(self.canvas)
+        self.cards_window = self.canvas.create_window((0, 0), window=self.cards, anchor='nw')
+        self.cards.bind('<Configure>', lambda _: self.canvas.configure(scrollregion=self.canvas.bbox('all')))
+        self.canvas.bind('<Configure>', lambda e: self.canvas.itemconfigure(self.cards_window, width=e.width))
+        self.canvas.bind_all('<MouseWheel>', self.wheel)
+
+    def wheel(self, event):
+        # Keep list/combobox scrolling independent from the image panel.
+        if event.widget == self.canvas or str(event.widget).startswith(str(self.cards)):
+            self.canvas.yview_scroll(-int(event.delta/120), 'units')
+
+    def task(self, work, success, error=None):
+        future = self.pool.submit(work)
+        def check():
+            if self.closed:
+                return
+            if not future.done():
+                self.window.after(80, check)
+                return
+            try:
+                value = future.result()
+            except Exception as exc:
+                if error:
+                    error(exc)
+                else:
+                    messagebox.showerror('No se pudo completar la acción', str(exc), parent=self.window)
+            else:
+                success(value)
+        self.window.after(80, check)
+
+    def refresh_libraries(self):
+        self.task(lambda: self.store.libraries(self.samples), self.libraries_loaded)
+
+    def libraries_loaded(self, libraries):
+        self.all_libraries = libraries
+        self.filter_libraries()
+        if not libraries:
+            self.count.set('Todavía no hay catálogos. Usá Actualizar cuando avance Run-Library.')
+
+    def filter_libraries(self):
+        if not hasattr(self, 'all_libraries'):
+            return
+        needle = search_key(self.console_filter.get())
+        self.library_rows = {f"{r['system']}  ·  {r['revision']}": r for r in self.all_libraries
+                             if needle in search_key(r['system'])}
+        values = list(self.library_rows)
+        old = self.library_name.get()
+        self.library_box['values'] = values
+        if old not in values:
+            self.library_name.set(values[0] if values else '')
+        if values:
+            self.load_library()
+        else:
+            self.generation += 1
+            self.current_output = self.catalog = self.serial = None
+            self.games = {}
+            self.tree.delete(*self.tree.get_children())
+            self.clear_cards()
+            self.count.set('Sin bibliotecas para este filtro')
+            self.title.configure(text='Elegí una consola')
+            self.details.configure(text='')
+            self.update_buttons()
+
+    def load_library(self):
+        row = self.library_rows.get(self.library_name.get())
+        if not row:
+            return
+        self.generation += 1
+        generation = self.generation
+        output = row['output']
+        selected = self.serial if self.current_output == output else None
+        console_selected = self.console_mode and self.current_output == output
+        self.count.set('Leyendo nombres y carpetas…')
+        def load():
+            catalog = self.store.read_catalog(output)
+            games = dict(catalog.get('games', {}))
+            for folder in output.iterdir():
+                if folder.is_dir() and not folder.is_symlink() and folder.name not in games:
+                    games[folder.name] = {'serial': folder.name, 'entries': [], 'images': {}}
+            return catalog, games
+        def done(result):
+            if generation != self.generation:
+                return
+            self.current_output = output
+            self.catalog, self.games = result
+            self.serial = selected
+            self.console_mode = False
+            self.filter_games()
+            if console_selected:
+                self.show_console()
+        self.task(load, done)
+
+    def schedule_filter(self, *_):
+        if self.filter_timer:
+            self.window.after_cancel(self.filter_timer)
+        self.filter_timer = self.window.after(180, self.filter_games)
+
+    def filter_games(self):
+        self.filter_timer = None
+        needle = search_key(self.query.get())
+        selected = self.serial
+        self.tree.delete(*self.tree.get_children())
+        rows = []
+        for serial, game in self.games.items():
+            titles = game_titles(game)
+            title = titles[0] if titles else f'{serial} · sin catálogo todavía'
+            if all(term in search_key(' '.join([serial, *titles])) for term in needle.split()):
+                rows.append((title, serial))
+        rows.sort(key=lambda row: search_key(row[0]))
+        self.rows = {}
+        for i, (title, serial) in enumerate(rows):
+            item = str(i)
+            self.tree.insert('', 'end', iid=item, text=title, values=(serial,))
+            self.rows[item] = serial
+            if serial == selected:
+                self.tree.selection_set(item)
+                self.tree.see(item)
+        self.count.set(f'{len(rows):,} juegos / carpetas')
+        if rows and not self.tree.selection():
+            self.tree.selection_set('0')
+        elif not rows:
+            self.serial = None
+            self.clear_cards()
+            self.title.configure(text='Sin coincidencias')
+
+    def clear_cards(self):
+        for child in self.cards.winfo_children():
+            child.destroy()
+        self.photos.clear()
+        self.action_buttons.clear()
+
+    def select_game(self):
+        selection = self.tree.selection()
+        if not selection or selection[0] not in self.rows:
+            return
+        self.console_mode = False
+        self.kind_box.configure(values=list(KINDS), state='normal')
+        if self.kind.get() not in KINDS:
+            self.kind.set('cover_back')
+        self.serial = self.rows[selection[0]]
+        game = self.games[self.serial]
+        titles = game_titles(game)
+        self.title.configure(text=titles[0] if titles else self.serial)
+        self.details.configure(text=f"{self.serial}\n"+'\n'.join(titles[1:])+f'\n{self.current_output / self.serial}')
+        self.clear_cards()
+        self.canvas.yview_moveto(0)
+        images = dict(game.get('images', {}))
+        directory = inside(self.current_output/self.serial, self.current_output)
+        if directory.exists():
+            for path in directory.iterdir():
+                if path.suffix.lower() in {'.webp', '.png', '.jpg', '.jpeg', '.pdf'} and path.stem not in images:
+                    images[path.stem] = {'path': f'{self.serial}/{path.name}', 'kind': path.stem, 'bytes': path.stat().st_size}
+                    if path.suffix.lower() == '.pdf':
+                        images[path.stem]['format'] = 'PDF'
+        labels = sorted(images, key=lambda label: (list(KINDS).index(images[label]['kind']) if images[label]['kind'] in KINDS else 99, label))
+        for kind in ('cover_front', 'cover_back', 'disc', 'screenshot', 'logo', 'title_screen'):
+            if not any(asset['kind'] == kind for asset in images.values()):
+                labels.append(kind)
+        self.render_cards(labels, images)
+
+    def show_console(self):
+        if not self.current_output or not self.catalog:
+            return
+        self.console_mode = True
+        self.serial = None
+        self.tree.selection_remove(*self.tree.selection())
+        self.generation += 1
+        generation, output = self.generation, self.current_output
+        self.clear_cards()
+        self.title.configure(text=self.catalog['system'])
+        self.details.configure(text=f'Imágenes de la consola\n{output}')
+        self.kind_box.configure(values=list(CONSOLE_KINDS), state='readonly')
+        if self.kind.get() not in CONSOLE_KINDS:
+            self.kind.set('logo')
+        self.update_buttons()
+        def done(images):
+            if self.console_mode and self.current_output == output and self.generation == generation:
+                self.render_cards(list(CONSOLE_KINDS), images)
+        self.task(lambda: self.console_store.images(output), done)
+
+    def render_cards(self, labels, images):
+        generation, serial, output = self.generation, self.serial, self.current_output
+        for index, label in enumerate(labels):
+            asset = images.get(label)
+            kind = asset['kind'] if asset else label
+            is_pdf = kind == 'manual' or bool(asset and asset.get('format') == 'PDF')
+            card = tk.Frame(self.cards, bg=PANEL, padx=12, pady=12)
+            card.grid(row=index//2, column=index%2, sticky='nsew', padx=(0, 10), pady=(0, 12))
+            self.cards.columnconfigure(index%2, weight=1)
+            titles = CONSOLE_KINDS if self.console_mode else KINDS
+            tk.Label(card, text=titles.get(kind, kind), bg=PANEL, fg=TEXT, font=('Segoe UI Semibold', 11)).pack(anchor='w')
+            tk.Label(card, text=label+('.pdf' if is_pdf else '.webp'), bg=PANEL, fg=MUTED).pack(anchor='w', pady=(2, 6))
+            preview = tk.Label(card, bg='#10151c', fg=MUTED, text='Sin imagen' if not asset else 'Cargando…', width=30, height=10)
+            preview.pack(fill='both', expand=True)
+            if asset and is_pdf:
+                path = inside(output/asset['path'], output)
+                preview.configure(text=f"PDF · {asset.get('pages', '?')} páginas\n{asset['bytes']/1024:.1f} KiB\n\nPulsá para abrir el manual", cursor='hand2')
+                preview.bind('<Button-1>', lambda _, p=path: self.open_pdf(p))
+                original_size = asset.get('compression', {}).get('candidate_bytes', {}).get('original', asset['bytes'])
+                tk.Label(card, text=f"Original: {original_size/1024:.1f} KiB · guardado: {asset['bytes']/1024:.1f} KiB", bg=PANEL, fg=MUTED).pack(anchor='w', pady=7)
+            elif asset:
+                path = inside(output/asset['path'], output)
+                def thumbnail(path=path):
+                    with Image.open(path) as im:
+                        im = im.convert('RGBA')
+                        im.thumbnail((320, 220), Image.Resampling.LANCZOS)
+                        return im
+                def loaded(im, widget=preview, path=path):
+                    if generation != self.generation or serial != self.serial or not widget.winfo_exists():
+                        return
+                    photo = ImageTk.PhotoImage(im)
+                    self.photos.append(photo)
+                    widget.configure(image=photo, text='', width=0, height=0, cursor='hand2')
+                    widget.bind('<Button-1>', lambda _: self.view_image(path))
+                def unavailable(exc, widget=preview):
+                    if widget.winfo_exists():
+                        widget.configure(text='No disponible · Actualizá la biblioteca')
+                self.task(thumbnail, loaded, unavailable)
+                compression = asset.get('compression', {})
+                mode = 'sin pérdida' if compression.get('lossless') else 'calidad 90' if compression else ''
+                extra = ' · manual' if asset.get('manual') else ''
+                tk.Label(card, text=f"{asset.get('width', '?')} × {asset.get('height', '?')} · {asset['bytes']/1024:.1f} KiB · {mode}{extra}",
+                         bg=PANEL, fg=MUTED).pack(anchor='w', pady=7)
+            actions = ttk.Frame(card)
+            actions.pack(fill='x', pady=(6, 0))
+            button = ttk.Button(actions, text='Reemplazar' if asset else 'Importar',
+                                command=lambda k=kind, l=label: self.import_image(k, l))
+            button.pack(side='left')
+            self.action_buttons.append(button)
+            if not self.console_mode:
+                variant = ttk.Button(actions, text='+ Variante', command=lambda k=kind: self.import_image(k, self.next_label(k)))
+                variant.pack(side='left', padx=5)
+                self.action_buttons.append(variant)
+            if asset and asset.get('manual'):
+                reset = ttk.Button(actions, text='Deshacer' if self.console_mode else 'Restaurar', command=lambda l=label: self.reset(l))
+                reset.pack(side='left')
+                self.action_buttons.append(reset)
+        self.update_buttons()
+
+    def next_label(self, kind):
+        if self.console_mode:
+            return kind
+        images = self.games[self.serial].get('images', {})
+        number = 1
+        while (kind if number == 1 else f'{kind}{number}') in images:
+            number += 1
+        return kind if number == 1 else f'{kind}{number}'
+
+    def import_kind(self):
+        kind = self.kind.get().strip()
+        if not re.fullmatch(r'[a-z][a-z0-9_]{0,39}', kind):
+            messagebox.showerror('Tipo de imagen', 'Usá letras minúsculas, números y guiones bajos, por ejemplo cover_back.', parent=self.window)
+            return
+        if self.console_mode and kind not in CONSOLE_KINDS:
+            messagebox.showerror('Tipo de consola', 'Elegí logo, render o screenshot.', parent=self.window)
+            return
+        if self.serial or self.console_mode:
+            self.import_image(kind, self.next_label(kind))
+
+    def import_image(self, kind, label):
+        if not self.can_edit():
+            return
+        is_pdf = kind == 'manual'
+        filename = filedialog.askopenfilename(parent=self.window, title=f"Importar {label}.{'pdf' if is_pdf else 'webp'}",
+            filetypes=[('Manuales PDF', '*.pdf')] if is_pdf else [('Imágenes', '*.png *.jpg *.jpeg *.webp'), ('Todos los archivos', '*.*')])
+        if not filename:
+            return
+        output, serial = self.current_output, self.serial
+        console = self.console_mode
+        self.busy = True
+        self.note.configure(text='Optimizando imágenes del PDF y comparando tamaños…' if is_pdf else 'Comparando WebP sin pérdida y calidad 90…')
+        self.update_buttons()
+        def work():
+            if is_pdf:
+                from pdf_tools import optimize_pdf
+                encoded = optimize_pdf(filename)
+            else:
+                encoded = encode_import(filename)
+            if console:
+                self.console_store.save(output, kind, encoded)
+            else:
+                self.store.save(output, serial, kind, label, encoded)
+            return encoded
+        def done(encoded):
+            self.busy = False
+            sizes = encoded['compression']['candidate_bytes']
+            if is_pdf:
+                self.note.configure(text=f"Guardado {label}.pdf · {encoded['pages']} páginas · {sizes['original']/1024:.1f} → {encoded['bytes']/1024:.1f} KiB")
+            else:
+                self.note.configure(text=f"Guardado {label}.webp · sin pérdida: {sizes['lossless']/1024:.1f} KiB · calidad 90: {sizes['lossy90']/1024:.1f} KiB")
+            self.reload_game(output, serial, console)
+        self.task(work, done, self.edit_failed)
+
+    def edit_failed(self, exc):
+        self.busy = False
+        self.note.configure(text='No se guardó el cambio. Los respaldos anteriores se conservan.')
+        self.update_buttons()
+        messagebox.showerror('No se pudo guardar', str(exc), parent=self.window)
+
+    def reload_game(self, output, serial, console=False):
+        if self.current_output != output:
+            return
+        self.catalog = self.store.read_catalog(output)
+        if console:
+            if self.console_mode:
+                self.show_console()
+            return
+        self.games = dict(self.catalog['games'])
+        self.serial = serial
+        self.filter_games()
+
+    def reset(self, label):
+        if not self.can_edit():
+            return
+        output, serial = self.current_output, self.serial
+        console = self.console_mode
+        self.busy = True
+        self.update_buttons()
+        def done(_):
+            self.busy = False
+            self.note.configure(text='Cambio de consola deshecho.' if console else 'Imagen generada restaurada; el cambio manual quedó en el historial.')
+            self.reload_game(output, serial, console)
+        self.task(lambda: self.console_store.undo(output, label) if console else self.store.reset(output, serial, label), done, self.edit_failed)
+
+    def can_edit(self):
+        return bool(self.catalog and (self.console_mode or self.serial in self.catalog.get('games', {})) and
+                    self.catalog.get('status') in {'complete', 'sample_complete'} and
+                    self.catalog.get('schema_version') == 2 and not self.busy and not self.store.lock_status())
+
+    def update_buttons(self):
+        state = 'normal' if self.can_edit() else 'disabled'
+        for button in [self.add_button, *self.action_buttons]:
+            button.configure(state=state)
+        self.undo_button.configure(state=state)
+
+    def undo(self):
+        if not self.can_edit():
+            return
+        output, serial = self.current_output, self.serial
+        console = self.console_mode
+        self.busy = True
+        self.update_buttons()
+        def done(_):
+            self.busy = False
+            self.note.configure(text='Último cambio de consola deshecho.' if console else 'Último cambio de este juego deshecho.')
+            self.reload_game(output, serial, console)
+        self.task(lambda: self.console_store.undo(output) if console else self.store.undo(output, serial), done, self.edit_failed)
+
+    def poll_status(self):
+        if self.closed:
+            return
+        locked = self.store.lock_status()
+        self.status.set('Solo lectura · '+locked if locked else f'Edición disponible · Respaldos e historial: {self.store.manual}')
+        self.update_buttons()
+        self.window.after(1500, self.poll_status)
+
+    def view_image(self, path):
+        dialog = tk.Toplevel(self.window)
+        dialog.title(path.name+' · vista de píxeles')
+        dialog.geometry('960x720')
+        controls = ttk.Frame(dialog, padding=8)
+        controls.pack(fill='x')
+        viewport = ttk.Frame(dialog)
+        viewport.pack(fill='both', expand=True)
+        canvas = tk.Canvas(viewport, bg='#10151c', highlightthickness=0)
+        horizontal = ttk.Scrollbar(viewport, orient='horizontal', command=canvas.xview)
+        vertical = ttk.Scrollbar(viewport, orient='vertical', command=canvas.yview)
+        canvas.configure(xscrollcommand=horizontal.set, yscrollcommand=vertical.set)
+        canvas.grid(row=0, column=0, sticky='nsew')
+        vertical.grid(row=0, column=1, sticky='ns')
+        horizontal.grid(row=1, column=0, sticky='ew')
+        viewport.rowconfigure(0, weight=1)
+        viewport.columnconfigure(0, weight=1)
+        with Image.open(path) as image:
+            original = image.convert('RGBA')
+        def zoom(scale):
+            if scale is None:
+                scale = min(max(1, canvas.winfo_width())/original.width, max(1, canvas.winfo_height())/original.height)
+            size = (max(1, int(original.width*scale)), max(1, int(original.height*scale)))
+            photo = ImageTk.PhotoImage(original.resize(size, Image.Resampling.NEAREST))
+            canvas.photo = photo
+            canvas.delete('all')
+            canvas.create_image(0, 0, image=photo, anchor='nw')
+            canvas.configure(scrollregion=(0, 0, *size))
+        for label, scale in [('Ajustar', None), ('100%', 1), ('200%', 2), ('400%', 4)]:
+            ttk.Button(controls, text=label, command=lambda s=scale: zoom(s)).pack(side='left', padx=4)
+        ttk.Label(controls, text='Zoom sin suavizado para revisar los píxeles').pack(side='left', padx=16)
+        dialog.after(100, lambda: zoom(1))
+
+    def open_pdf(self, path):
+        try:
+            os.startfile(str(path))
+        except OSError as exc:
+            messagebox.showerror('No se pudo abrir el manual', str(exc), parent=self.window)
+
+    def close(self):
+        if self.busy:
+            messagebox.showinfo('Guardando imagen', 'Esperá a que termine el guardado antes de cerrar.', parent=self.window)
+            return
+        self.closed = True
+        self.pool.shutdown(wait=False, cancel_futures=True)
+        self.window.destroy()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--root', type=Path, default=ROOT)
+    parser.add_argument('--samples', action='store_true', help='Include pilot libraries')
+    parser.add_argument('--smoke-test', action='store_true', help='Build UI and close automatically')
+    parser.add_argument('--self-test', action='store_true', help='Exercise UI against a temporary library')
+    parser.add_argument('--self-test-report', type=Path, help='Write the automated test result to a JSON file')
+    args = parser.parse_args()
+    if args.self_test:
+        from check_artwork_editor import run
+        result = run()
+        if args.self_test_report:
+            import sys
+            import PIL
+            from pdf_tools import pdf_api
+            pdf_api()
+            write_json(args.self_test_report, {'status': 'passed' if result == 0 else 'failed',
+                       'frozen': bool(getattr(sys, 'frozen', False)), 'pillow': PIL.__version__,
+                       'pdf': True, 'console_artwork': True})
+        return result
+    window = tk.Tk()
+    window.withdraw()
+    from editor_location import choose_library
+    library = choose_library(args.root, settings_path(),
+        lambda: filedialog.askdirectory(parent=window, mustexist=True, initialdir=str(args.root),
+                                       title='Seleccioná la biblioteca: carpeta que contiene las consolas'),
+        lambda text: messagebox.showerror('Biblioteca no encontrada', text, parent=window), args.samples)
+    if library is None:
+        window.destroy()
+        return 0
+    editor = Editor(window, args.root, args.samples, library=library)
+    if not args.smoke_test:
+        window.deiconify()
+    if args.smoke_test:
+        window.after(2000, editor.close)
+    window.mainloop()
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

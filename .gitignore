@@ -1,0 +1,11 @@
+/.venv/
+/.deps/
+/editor-settings.json
+/reports/
+/manual/
+/generated/
+__pycache__/
+*.py[cod]
+/build/
+/dist/
+*.spec

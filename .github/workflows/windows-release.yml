@@ -1,0 +1,62 @@
+name: Windows executable
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            requirements-editor.txt
+            requirements-build.txt
+      - name: Install build dependencies
+        run: python -m pip install -r requirements-build.txt
+      - name: Run tests
+        run: python -B -m unittest discover -s tests
+      - name: Build executable
+        run: python scripts/build_exe.py
+      - name: Test isolated executable
+        run: python scripts/check_executable.py
+      - name: Keep build artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: OpenCabinet-BDD_Editor-windows-x64
+          path: |
+            dist/OpenCabinet-BDD_Editor.exe
+            dist/OpenCabinet-BDD_Editor.exe.sha256
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$env:RELEASE_TAG" *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create "$env:RELEASE_TAG" --verify-tag --title "$env:RELEASE_TAG" --generate-notes
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          gh release upload "$env:RELEASE_TAG" dist/OpenCabinet-BDD_Editor.exe dist/OpenCabinet-BDD_Editor.exe.sha256 --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
