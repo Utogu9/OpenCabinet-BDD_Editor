@@ -71,6 +71,21 @@ class RegistrationTests(unittest.TestCase):
         self.registry.undo(self.output)
         self.assertEqual(self.read(),self.initial)
 
+    def test_registration_undo_preserves_later_metadata_edits_on_existing_game(self):
+        from metadata_store import MetadataStore
+        new = self.cache.import_bytes('Sony - PlayStation','redump',dat(
+            '<game id="4" name="Another Revision (USA)"><serial>SLUS-00001</serial></game>'))
+        self.registry.add(self.output, new, '4', ['SLUS-00001'])
+        editor = MetadataStore(self.store)
+        snap = editor.snapshot(self.output, 'SLUS-00001')
+        value = {'descriptions': {'en': 'Keep this metadata'}}
+        editor.save(self.output, 'SLUS-00001', value, snap['token'])
+        self.registry.undo(self.output)
+        game = self.read()['games']['SLUS-00001']
+        self.assertEqual(game['entries'], self.initial['games']['SLUS-00001']['entries'])
+        self.assertEqual(game['metadata_overrides'], value)
+        self.assertEqual(game['images'], self.initial['games']['SLUS-00001']['images'])
+
     def test_manual_artwork_history_and_new_games_survive_each_other(self):
         self.store.save(self.output,'SLUS-00001','cover_front','cover_front',self.encoded)
         self.registry.add(self.output,self.catalog,'2',['SLUS-12345'])

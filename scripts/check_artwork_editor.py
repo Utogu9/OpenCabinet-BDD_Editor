@@ -207,6 +207,8 @@ def run():
         restarted.pool.shutdown(wait=True, cancel_futures=True)
         from i18n import set_language
         set_language('en', persist=False)
+        from check_metadata_editor import run as check_metadata
+        check_metadata()
         print(json.dumps({'desktop_ui':'passed', 'search':True, 'replace':True, 'pixel_view':True,
                           'undo':True, 'add_type':True, 'restore':True, 'console_filter':True,
                           'batch_lock':True, 'pdf_import_open_undo':True, 'console_root_artwork':True,

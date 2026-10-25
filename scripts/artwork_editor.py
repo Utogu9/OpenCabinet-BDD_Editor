@@ -45,6 +45,9 @@ class Editor:
         self.console_store = ConsoleArtwork(self.store)
         from game_registration import GameRegistration
         self.registration = GameRegistration(self.store)
+        from metadata_store import MetadataStore
+        self.metadata_store = MetadataStore(self.store)
+        self.metadata_dialog = None
         self.pending_game = None
         self.console_mode = False
         self.samples = include_samples
@@ -139,6 +142,8 @@ class Editor:
         self.title.pack(anchor='w', pady=(0, 6))
         self.details = localize(ttk.Label(right, style='Muted.TLabel', wraplength=760), 'Search by name, region or identifier.', values={})
         self.details.pack(anchor='w', pady=(0, 12))
+        self.metadata_button = localize(ttk.Button(right, command=self.edit_metadata), 'Edit metadata', values={})
+        self.metadata_button.pack(anchor='w', pady=(0, 10))
         extra = ttk.Frame(right)
         extra.pack(fill='x', pady=(0, 12))
         localize(ttk.Label(extra), 'Add type:', values={}).pack(side='left', padx=(0, 8))
@@ -242,6 +247,8 @@ class Editor:
         def load():
             if self.registration.has_pending(output):
                 self.registration.recover(output)
+            if self.metadata_store.has_pending(output):
+                self.metadata_store.recover(output)
             catalog = self.store.read_catalog(output)
             games = dict(catalog.get('games', {}))
             for folder in output.iterdir():
@@ -503,10 +510,21 @@ class Editor:
         for button in [self.add_button, *self.action_buttons]:
             button.configure(state=state)
         self.undo_button.configure(state=state)
+        self.metadata_button.configure(state=state)
         self.language_button.configure(state='disabled' if self.busy else 'normal')
         available = not self.busy and not self.store.lock_status()
         self.new_game_button.configure(state='normal' if available else 'disabled')
         self.undo_game_button.configure(state='normal' if available and self.current_output and self.registration.can_undo(self.current_output) else 'disabled')
+
+    def edit_metadata(self):
+        if self.metadata_dialog and self.metadata_dialog.window.winfo_exists():
+            self.metadata_dialog.window.lift()
+            return self.metadata_dialog
+        if not self.can_edit():
+            return
+        from metadata_dialog import MetadataDialog
+        self.metadata_dialog = MetadataDialog(self)
+        return self.metadata_dialog
 
     def add_game(self):
         if self.busy or self.store.lock_status():
@@ -617,8 +635,15 @@ class Editor:
         if self.busy:
             messagebox.showinfo(tr('Operation in progress'), tr('Wait for the operation to finish before closing.'), parent=self.window)
             return
+        if self.metadata_dialog and self.metadata_dialog.window.winfo_exists():
+            self.metadata_dialog.close()
+            if self.metadata_dialog is not None:
+                return
         self.closed = True
         self.pool.shutdown(wait=False, cancel_futures=True)
+        self.window.update_idletasks()
+        for callback in self.window.tk.call('after', 'info'):
+            self.window.after_cancel(callback)
         self.window.destroy()
 
 

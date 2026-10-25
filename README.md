@@ -4,7 +4,7 @@
 
 ## English
 
-Artwork and manual editor for [OpenCabinet-BDD](https://github.com/Utogu9/OpenCabinet-BDD).
+Artwork, manual and metadata editor for [OpenCabinet-BDD](https://github.com/Utogu9/OpenCabinet-BDD).
 
 **Windows:** download `OpenCabinet-BDD_Editor.exe` from [Releases](https://github.com/Utogu9/OpenCabinet-BDD_Editor/releases/latest), run it and select your library. Python is included; no installation is required. Settings are stored in `%LOCALAPPDATA%\OpenCabinet-BDD_Editor`.
 
@@ -22,6 +22,18 @@ This folder contains only the editor. Download the artwork separately; DAT files
 
 To test the interface using temporary files: `Run-Editor.cmd --self-test`.
 
+### Editing metadata
+
+Select a game and click **Edit metadata**. The form displays its shared metadata, including Wikidata values when available. Enable **Custom value** beside a field to enter your own value; disable it to use the shared value again. Changes affect only the selected serial. Fields can also be filled for games with no Wikidata record. Names, brief descriptions and full descriptions support English and Spanish.
+
+Game fields include developer, publisher, genre, minimum/maximum players, game mode, release date and platform. Enter one value per line, a positive integer for player counts, and `YYYY`, `YYYY-MM` or `YYYY-MM-DD` for dates. An enabled custom field left empty deliberately hides the shared value.
+
+For a console, select **Console artwork** and then **Edit metadata**. Its fields are **Release Date**, **Developer** and **Manufacturer**, plus names and descriptions. The **Custom metadata / source** tab accepts additional fields as a JSON object and displays the original shared game record for reference.
+
+**Save metadata** updates the selected console's `catalog.json`. Per-game edits are stored in `games[serial].metadata_overrides`; console data is stored in the root `console_metadata` object. Both use language dictionaries (`labels`, `short_descriptions`, `descriptions`), a `fields` dictionary of statement arrays, and optional `custom` data. A consumer resolves game data by overlaying these field/language keys on the record referenced by `metadata_id`; explicit empty values take precedence. Unedited statements retain their qualifiers and references. Manually entered field statements have `source: "manual"`; the shared record's license and provenance describe that original record, not the user's new content. Metadata names do not rename DAT entries or folders.
+
+**Undo metadata change** reverses the latest metadata edit for the current game or console. Metadata and artwork have separate undo histories and keep each other's changes. Backups and pending-write recovery use the editor's private history folder. The editor does not download metadata automatically or change the original shared Wikidata records.
+
 ### Adding a missing game
 
 Click **Add game from DAT**, choose the console and provider, then **Download / update DAT** or **Import DAT/ZIP**. Search by name or serial, select the exact region/revision/disc entry and confirm the identifiers to create. Existing game folders are reused; their images are preserved. New consoles can also be added to the selected library.
@@ -34,7 +46,7 @@ DAT files are cached locally with their hashes and source information. If No-Int
 
 ## Español
 
-Editor de imágenes y manuales de [OpenCabinet-BDD](https://github.com/Utogu9/OpenCabinet-BDD).
+Editor de imágenes, manuales y metadatos de [OpenCabinet-BDD](https://github.com/Utogu9/OpenCabinet-BDD).
 
 **Windows:** descargá `OpenCabinet-BDD_Editor.exe` desde [Releases](https://github.com/Utogu9/OpenCabinet-BDD_Editor/releases/latest), ejecutalo y seleccioná tu biblioteca. Incluye Python; no requiere instalación. La configuración se guarda en `%LOCALAPPDATA%\OpenCabinet-BDD_Editor`.
 
@@ -51,6 +63,18 @@ Los respaldos e historial quedan en `_editor` dentro de la biblioteca elegida; s
 Esta carpeta contiene únicamente el editor. Las imágenes se descargan aparte; no necesita los DAT, el conversor ni el proyecto original.
 
 Para comprobar la interfaz con archivos temporales: `Run-Editor.cmd --self-test`.
+
+### Editar metadatos
+
+Seleccioná un juego y pulsá **Editar metadatos**. El formulario muestra sus datos compartidos, incluidos los de Wikidata cuando existen. Activá **Valor propio** junto a un campo para escribir tu dato; desactivalo para volver al valor compartido. Los cambios afectan únicamente al serial elegido. También se pueden completar juegos sin ficha de Wikidata. Los nombres, descripciones breves y descripciones completas admiten inglés y español.
+
+Los campos del juego incluyen desarrollador, editor, género, jugadores mínimos/máximos, modo de juego, fecha de lanzamiento y plataforma. Ingresá un valor por línea, un entero positivo para los jugadores y `AAAA`, `AAAA-MM` o `AAAA-MM-DD` para las fechas. Un valor propio activado pero vacío oculta deliberadamente el valor compartido.
+
+Para una consola, seleccioná **Imágenes de la consola** y luego **Editar metadatos**. Sus campos son **Fecha de lanzamiento**, **Desarrollador** y **Fabricante**, además de nombres y descripciones. La pestaña **Metadatos personalizados / fuente** admite campos adicionales como objeto JSON y muestra la ficha compartida original del juego como referencia.
+
+**Guardar metadatos** actualiza el `catalog.json` de la consola elegida. Las ediciones por juego se guardan en `games[serial].metadata_overrides`; los datos de la consola, en el objeto raíz `console_metadata`. Ambos usan diccionarios por idioma (`labels`, `short_descriptions`, `descriptions`), un diccionario `fields` con listas de declaraciones y datos `custom` opcionales. Las aplicaciones obtienen los datos del juego superponiendo esas claves de campo/idioma a la ficha indicada por `metadata_id`; los valores vacíos explícitos tienen prioridad. Las declaraciones sin editar conservan sus calificadores y referencias. Las ingresadas a mano tienen `source: "manual"`; la licencia y procedencia de la ficha compartida describen esa ficha original, no el contenido nuevo del usuario. Los nombres de metadatos no renombran entradas del DAT ni carpetas.
+
+**Deshacer cambio de metadatos** revierte la última edición de la selección actual, sea un juego o una consola. Los metadatos y las imágenes tienen historiales separados y conservan los cambios del otro. Los respaldos y la recuperación de escrituras interrumpidas usan la carpeta privada del editor. El editor no descarga metadatos automáticamente ni modifica las fichas compartidas originales de Wikidata.
 
 ### Agregar un juego que falta
 

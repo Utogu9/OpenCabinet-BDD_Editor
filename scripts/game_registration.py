@@ -209,11 +209,15 @@ class GameRegistration:
             event = history[-1]
             remove = []
             for folder, after in event['after'].items():
-                if metadata(catalog['games'].get(folder)) != after:
+                identity = lambda game: {k:v for k,v in (metadata(game) or {}).items()
+                                         if k not in {'metadata_id', 'metadata_overrides'}}
+                if identity(catalog['games'].get(folder)) != identity(after):
                     raise ValueError(tr('The game association changed after registration; it will not be overwritten'))
                 previous = event['before'][folder]
                 directory = inside(output/folder, output)
                 if previous is None:
+                    if catalog['games'][folder].get('metadata_overrides'):
+                        raise ValueError(tr("Undo this game's metadata changes before removing its registration."))
                     if catalog['games'][folder]['images'] or (directory.exists() and any(directory.iterdir())):
                         raise ValueError(tr("Undo the new games' images first; registration undo only removes empty folders"))
                     if directory.exists():
@@ -222,8 +226,11 @@ class GameRegistration:
                     if previous is None:
                         view['games'].pop(folder)
                     else:
-                        images = view['games'][folder]['images']
-                        view['games'][folder] = {**deepcopy(previous), 'images':images}
+                        current = view['games'][folder]
+                        restored = {k:v for k,v in deepcopy(previous).items()
+                                    if k not in {'metadata_id', 'metadata_overrides'}}
+                        restored.update({k:deepcopy(current[k]) for k in ('metadata_id', 'metadata_overrides') if k in current})
+                        view['games'][folder] = {**restored, 'images':current['images']}
             history.pop()
             self._commit(output, self._payloads(output, catalog, base, state, history), remove=remove)
             return list(event['after'])
