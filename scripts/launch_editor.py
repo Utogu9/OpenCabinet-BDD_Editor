@@ -1,4 +1,6 @@
 """Create the editor's private environment and launch it with that interpreter."""
+from i18n import tr
+from i18n import initialize_language
 from pathlib import Path
 import subprocess
 import sys
@@ -8,13 +10,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
+    initialize_language()
     if sys.version_info < (3, 10):
-        print('Instalá Python 3.10 o posterior, con Tkinter, y volvé a ejecutar Run-Editor.cmd.')
+        print(tr('Install Python 3.10 or later with Tkinter, then run Run-Editor.cmd again.'))
         return 1
     environment = ROOT/'.venv'
     python = environment/('Scripts/python.exe' if sys.platform == 'win32' else 'bin/python')
     if not python.exists():
-        print('Preparando el entorno del editor...', flush=True)
+        print(tr('Preparing the editor environment...'), flush=True)
         venv.EnvBuilder(with_pip=True).create(environment)
     check = subprocess.run([str(python), '-c',
         "import tkinter, PIL, pypdf; from PIL import features; "
@@ -22,16 +25,16 @@ def main():
         "assert pypdf.__version__ == '6.21.2'; assert features.check('webp')"],
         capture_output=True)
     if check.returncode:
-        print('Instalando las dependencias del editor (requiere Internet)...', flush=True)
+        print(tr('Installing editor dependencies (Internet access required)...'), flush=True)
         result = subprocess.run([str(python), '-m', 'pip', 'install', '-r', str(ROOT/'requirements-editor.txt')])
         if result.returncode:
             return result.returncode
         check = subprocess.run([str(python), '-c', 'import tkinter; from PIL import features; assert features.check("webp")'])
         if check.returncode:
-            print('Este Python necesita Tkinter y soporte WebP para ejecutar el editor.')
+            print(tr('This Python installation needs Tkinter and WebP support to run the editor.'))
             return 1
     if sys.argv[1:] == ['--install-only']:
-        print('Editor instalado. Ejecutá Run-Editor.cmd para abrirlo.', flush=True)
+        print(tr('Editor installed. Run Run-Editor.cmd to open it.'), flush=True)
         return 0
     return subprocess.call([str(python), '-B', str(ROOT/'scripts/artwork_editor.py'), *sys.argv[1:]])
 

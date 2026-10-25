@@ -25,6 +25,11 @@ def run():
         pdf = PdfWriter()
         pdf.add_blank_page(width=200, height=300)
         pdf.write(manual_pdf)
+        from dat_catalog import DatCache
+        dat_cache = DatCache(root/'test-dat-cache')
+        dat_cache.import_bytes('Sony - PlayStation','redump',
+            b'<datafile><header><name>Sony - PlayStation</name></header>'
+            b'<game id="999" name="New Game (USA)"><serial>SLUS-99999</serial></game></datafile>')
         output = root/'generated/Test Console'
         folder = output/'TEST-1'
         folder.mkdir(parents=True)
@@ -34,23 +39,38 @@ def run():
         (output/'catalog.json').write_text(json.dumps({'schema_version':2, 'system':'Test Console',
             'status':'complete', 'games':{'TEST-1':{'serial':'TEST-1', 'entries':[{'name':'Example (USA)'}],
                                                  'images':{'cover_front':asset}}}}))
+        config = root/'editor-setting.json'
+        config.write_text(json.dumps({'library':str(root/'generated'),'keep_preference':'unchanged'}))
         window = tk.Tk()
         window.withdraw()
         editor = Editor(window, root)
         failures = []
         window.report_callback_exception = lambda typ, value, tb: failures.append(str(value))
         stage, started = 0, time.monotonic()
+        dialog = None
         def tick():
-            nonlocal stage
+            nonlocal stage, dialog
             try:
                 if failures:
                     raise AssertionError('; '.join(failures))
-                if time.monotonic()-started > 25:
+                if time.monotonic()-started > 45:
                     raise AssertionError(f'Timeout at UI stage {stage}')
                 if stage == 0 and editor.serial == 'TEST-1':
                     assert editor.can_edit()
                     assert editor.title.cget('text') == 'Example (USA)'
+                    assert editor.language_button.cget('text') == 'ES'
+                    assert editor.add_button.cget('text') == 'Import image'
                     editor.query.set('EXAMPLE usa')
+                    editor.toggle_language()
+                    assert editor.language_button.cget('text') == 'EN'
+                    assert editor.add_button.cget('text') == 'Importar imagen'
+                    assert editor.serial == 'TEST-1' and editor.query.get() == 'EXAMPLE usa'
+                    assert editor.title.cget('text') == 'Example (USA)'
+                    assert json.loads(config.read_text())['language'] == 'es'
+                    editor.toggle_language()
+                    assert editor.language_button.cget('text') == 'ES'
+                    assert editor.add_button.cget('text') == 'Import image'
+                    assert json.loads(config.read_text())['library'] == str(root/'generated')
                     stage = 1
                 elif stage == 1 and editor.filter_timer is None:
                     assert len(editor.rows) == 1
@@ -59,6 +79,11 @@ def run():
                 elif stage == 2 and not editor.busy:
                     assert editor.catalog['games']['TEST-1']['images']['cover_front']['manual']
                     editor.view_image(folder/'cover_front.webp')
+                    viewer = next(widget for widget in window.winfo_children() if isinstance(widget, tk.Toplevel))
+                    editor.toggle_language()
+                    assert viewer.title().endswith('vista de píxeles')
+                    editor.toggle_language()
+                    assert viewer.title().endswith('pixel view')
                     for widget in window.winfo_children():
                         if isinstance(widget, tk.Toplevel):
                             widget.withdraw()
@@ -115,6 +140,43 @@ def run():
                     stage = 12
                 elif stage == 12 and not editor.busy:
                     assert not (output/'render.webp').exists()
+                    from game_dialog import AddGameDialog
+                    dialog = AddGameDialog(editor,dat_cache)
+                    dialog.window.withdraw()
+                    stage = 13
+                elif stage == 13 and not dialog.busy:
+                    dialog.system.set('Sony - PlayStation')
+                    dialog.change_system()
+                    stage = 14
+                elif stage == 14 and not dialog.busy:
+                    assert dialog.catalog is not None
+                    dialog.query.set('New Game (USA)')
+                    dialog.search()
+                    stage = 15
+                elif stage == 15 and not dialog.busy:
+                    assert dialog.tree.get_children() == ('0',)
+                    dialog.tree.selection_set('0')
+                    dialog.show_destinations()
+                    dialog.create()
+                    stage = 16
+                elif stage == 16 and not editor.busy and editor.serial == 'SLUS-99999':
+                    game = editor.catalog['games']['SLUS-99999']
+                    assert game['entries'][0]['name'] == 'New Game (USA)'
+                    assert game['editor_added_entries'][0]['dat']['provider'] == 'redump'
+                    editor.import_image('cover_front','cover_front')
+                    stage = 17
+                elif stage == 17 and not editor.busy:
+                    assert editor.catalog['games']['SLUS-99999']['images']['cover_front']['manual']
+                    editor.undo()
+                    stage = 18
+                elif stage == 18 and not editor.busy:
+                    assert not editor.catalog['games']['SLUS-99999']['images']
+                    editor.undo_game()
+                    stage = 19
+                elif stage == 19 and not editor.busy and 'SLUS-99999' not in (editor.catalog or {}).get('games',{}):
+                    assert not (root/'generated/Sony - PlayStation/SLUS-99999').exists()
+                    editor.toggle_language()
+                    assert editor.language_button.cget('text') == 'EN'
                     editor.close()
                     return
             except Exception as exc:
@@ -128,16 +190,29 @@ def run():
                    str(manual_pdf) if k['filetypes'][0][1] == '*.pdf' else str(imported)), \
              patch('artwork_editor.os.startfile', create=True) as open_pdf, \
              patch('artwork_editor.messagebox.showerror', side_effect=lambda *a, **k: failures.append(str(a))), \
-             patch('artwork_editor.messagebox.showinfo'):
+             patch('artwork_editor.messagebox.showinfo'), \
+             patch('game_dialog.messagebox.askyesno',return_value=True):
             window.after(100, tick)
             window.mainloop()
             assert open_pdf.call_count == 1
         if failures:
             raise AssertionError('\n'.join(failures))
+        restarted_window = tk.Tk()
+        restarted_window.withdraw()
+        restarted = Editor(restarted_window, root)
+        assert restarted.language_button.cget('text') == 'EN'
+        assert restarted.new_game_button.cget('text') == 'Agregar juego desde DAT'
+        assert json.loads(config.read_text())['keep_preference'] == 'unchanged'
+        restarted.close()
+        restarted.pool.shutdown(wait=True, cancel_futures=True)
+        from i18n import set_language
+        set_language('en', persist=False)
         print(json.dumps({'desktop_ui':'passed', 'search':True, 'replace':True, 'pixel_view':True,
                           'undo':True, 'add_type':True, 'restore':True, 'console_filter':True,
                           'batch_lock':True, 'pdf_import_open_undo':True, 'console_root_artwork':True,
-                          'production_data_modified':False}))
+                          'production_data_modified':False, 'add_game_from_dat':True,
+                          'new_game_image_and_undo':True, 'undo_game_registration':True,
+                          'english_default':True, 'live_language_switch':True, 'saved_language_restart':True}))
         return 0
 
 

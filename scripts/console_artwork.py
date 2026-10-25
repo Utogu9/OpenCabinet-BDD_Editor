@@ -1,4 +1,5 @@
 """Console artwork at the library root; independent from game catalogues."""
+from i18n import tr
 import json
 from pathlib import Path
 
@@ -6,8 +7,8 @@ from PIL import Image
 from editor_store import ArtworkStore, atomic_bytes, inside, json_bytes, stamp
 from editor_common import digest
 
-CONSOLE_KINDS = {'logo': 'Logo de la consola', 'render': 'Render de la consola',
-                 'screenshot': 'Captura de la consola'}
+CONSOLE_KINDS = {'logo': 'Console logo', 'render': 'Console render',
+                 'screenshot': 'Console screenshot'}
 
 
 class ConsoleArtwork:
@@ -40,7 +41,7 @@ class ConsoleArtwork:
             path = inside(self.store.root/item['path'], self.store.root)
             if path.exists() and digest(path.read_bytes()) not in {
                     Path(item[key]).stem if item[key] else None for key in ('before', 'after')}:
-                raise ValueError('Un archivo de consola cambió fuera del editor; no se sobrescribe')
+                raise ValueError(tr('A console file changed outside the editor; it will not be overwritten'))
             for key in ('before', 'after'):
                 if item[key]:
                     self.store.read_blob(item[key])
@@ -70,13 +71,13 @@ class ConsoleArtwork:
 
     def save(self, output, kind, encoded):
         if kind not in CONSOLE_KINDS or encoded.get('format') == 'PDF':
-            raise ValueError('Las imágenes de consola admiten logo, render y screenshot en WebP')
+            raise ValueError(tr('Console artwork supports logo, render and screenshot in WebP'))
         with self.store.writer():
             output, metadata, history_path, pending = self.paths(output)
             self.recover(pending)
             catalog = self.store.read_catalog(output)
             if catalog.get('status') not in {'complete', 'sample_complete'}:
-                raise ValueError('Esperá a que termine de generarse esta consola')
+                raise ValueError(tr('Wait for this console to finish generating'))
             values = json.loads(metadata.read_text(encoding='utf-8')) if metadata.exists() else {
                 'schema_version': 1, 'system': catalog['system'], 'images': {}}
             history = json.loads(history_path.read_text(encoding='utf-8')) if history_path.exists() else {'events': []}
@@ -84,7 +85,7 @@ class ConsoleArtwork:
             previous = destination.read_bytes() if destination.exists() else None
             old = values['images'].get(kind)
             if old and (previous is None or digest(previous) != old['sha256']):
-                raise ValueError('La imagen de consola cambió fuera del editor; actualizá y revisala')
+                raise ValueError(tr('Console artwork changed outside the editor; refresh and review it'))
             history['events'].append({'kind': kind, 'previous': self.store.blob(previous) if previous is not None else None,
                                       'metadata': old, 'at': stamp()})
             asset = {k: encoded[k] for k in ('sha256', 'bytes', 'width', 'height', 'alpha', 'compression', 'filename', 'source_sha256')}
@@ -100,18 +101,18 @@ class ConsoleArtwork:
             output, metadata, history_path, pending = self.paths(output)
             self.recover(pending)
             if not history_path.exists():
-                raise ValueError('No hay cambios de consola para deshacer')
+                raise ValueError(tr('There are no console changes to undo'))
             history = json.loads(history_path.read_text(encoding='utf-8'))
             index = next((i for i in range(len(history['events'])-1, -1, -1)
                           if kind is None or history['events'][i]['kind'] == kind), None)
             if index is None:
-                raise ValueError('No hay más cambios de consola para deshacer')
+                raise ValueError(tr('There are no more console changes to undo'))
             event = history['events'].pop(index)
             values = json.loads(metadata.read_text(encoding='utf-8'))
             target = inside(output/(event['kind']+'.webp'), output)
             current = values['images'].get(event['kind'])
             if not current or not target.exists() or digest(target.read_bytes()) != current['sha256']:
-                raise ValueError('La imagen de consola cambió fuera del editor')
+                raise ValueError(tr('Console artwork changed outside the editor'))
             history.setdefault('undone', []).append({'asset': current, 'at': stamp()})
             if event['metadata'] is None:
                 values['images'].pop(event['kind'], None)

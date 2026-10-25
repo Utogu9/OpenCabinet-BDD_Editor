@@ -32,12 +32,12 @@ class RuntimePathTests(unittest.TestCase):
 
     def test_source_settings_stay_with_source(self):
         with patch.object(sys, 'frozen', False, create=True):
-            self.assertEqual(editor_common.settings_path(), editor_common.ROOT/'editor-settings.json')
+            self.assertEqual(editor_common.settings_path(), editor_common.ROOT/'editor-setting.json')
 
     def test_frozen_settings_are_persistent_outside_bundle(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {'LOCALAPPDATA':directory}), \
              patch.object(sys, 'frozen', True, create=True):
-            self.assertEqual(editor_common.settings_path(), Path(directory)/'OpenCabinet-BDD_Editor/editor-settings.json')
+            self.assertEqual(editor_common.settings_path(), Path(directory)/'OpenCabinet-BDD_Editor/editor-setting.json')
 
 
 if __name__ == '__main__':

@@ -1,6 +1,7 @@
 /.venv/
 /.deps/
 /editor-settings.json
+/editor-setting.json
 /reports/
 /manual/
 /generated/
@@ -9,3 +10,5 @@ __pycache__/
 /build/
 /dist/
 *.spec
+/dat-cache/
+/editor-error.log

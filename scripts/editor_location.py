@@ -1,9 +1,11 @@
 """Find and validate an editor library without touching the converter."""
+from i18n import tr
 import json
 from pathlib import Path
 
 from editor_store import ArtworkStore
 from editor_common import is_link, write_json
+from editor_settings import read_settings, update_settings
 
 
 def valid_library(directory, samples=False):
@@ -47,7 +49,7 @@ def choose_library(root, settings, ask, error, samples=False):
     if valid_library(default, samples):
         return default.resolve()
     try:
-        remembered = json.loads(Path(settings).read_text(encoding='utf-8'))['library']
+        remembered = read_settings(settings)['library']
         result = selected_library(remembered, samples)
         if result:
             return result
@@ -60,13 +62,12 @@ def choose_library(root, settings, ask, error, samples=False):
         result = selected_library(chosen, samples)
         if result:
             try:
-                write_json(Path(settings), {'library': str(result)})
+                update_settings({'library': str(result)}, settings)
             except OSError:
                 # Read-only application folders must not prevent opening artwork.
                 pass
             return result
-        error('No encontré una biblioteca válida. Elegí la carpeta que contiene las consolas '
-              'y sus catalog.json, o la carpeta del proyecto que contiene generated.')
+        error(tr('No valid library was found. Choose the folder containing the consoles and their catalog.json files, or the project folder containing generated.'))
 
 
 class LocatedArtworkStore(ArtworkStore):

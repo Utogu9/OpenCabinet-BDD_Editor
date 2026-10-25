@@ -1,4 +1,6 @@
 """Desktop artwork browser/editor. Run with Run-Editor.cmd."""
+from i18n import tr, localize, set_text, localize_title, localize_heading
+from i18n import initialize_language, language, set_language, refresh_translations
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
@@ -14,11 +16,11 @@ from editor_store import ArtworkStore, encode_import, inside
 from console_artwork import ConsoleArtwork, CONSOLE_KINDS
 from editor_common import ROOT, settings_path, write_json
 
-KINDS = {'cover_front': 'Carátula frontal', 'cover_back': 'Carátula trasera', 'cover_full': 'Carátula completa',
-         'poster_front': 'Póster frontal', 'poster_back': 'Póster trasero',
-         'spine': 'Lomo', 'disc': 'Disco', 'cartridge': 'Cartucho', 'logo': 'Logo',
-         'screenshot': 'Captura', 'title_screen': 'Pantalla de título',
-         'banner': 'Banner', 'fanart': 'Ilustración', 'manual': 'Manual PDF'}
+KINDS = {'cover_front': 'Front cover', 'cover_back': 'Back cover', 'cover_full': 'Full cover',
+         'poster_front': 'Front poster', 'poster_back': 'Back poster',
+         'spine': 'Spine', 'disc': 'Disc', 'cartridge': 'Cartridge', 'logo': 'Logo',
+         'screenshot': 'Screenshot', 'title_screen': 'Title screen',
+         'banner': 'Banner', 'fanart': 'Artwork', 'manual': 'PDF manual'}
 BG, PANEL, TEXT, MUTED, ACCENT = '#131820', '#1e2632', '#edf2f7', '#a6b4c5', '#54d6be'
 
 
@@ -31,7 +33,9 @@ def game_titles(game):
 
 
 class Editor:
-    def __init__(self, window, root=ROOT, include_samples=False, library=None):
+    def __init__(self, window, root=ROOT, include_samples=False, library=None, settings=None):
+        self.settings_file = Path(settings) if settings is not None else Path(root)/'editor-setting.json'
+        initialize_language(self.settings_file)
         if library is None:
             self.store = ArtworkStore(root)
         else:
@@ -39,6 +43,9 @@ class Editor:
             self.store = LocatedArtworkStore(library)
         self.window = window
         self.console_store = ConsoleArtwork(self.store)
+        from game_registration import GameRegistration
+        self.registration = GameRegistration(self.store)
+        self.pending_game = None
         self.console_mode = False
         self.samples = include_samples
         self.pool = ThreadPoolExecutor(max_workers=2)
@@ -49,7 +56,7 @@ class Editor:
         self.action_buttons = []
         self.filter_timer = None
         self.generation = 0
-        self.window.title('OpenCabinet · Editor de imágenes')
+        localize_title(self.window, 'OpenCabinet · Artwork editor')
         self.window.geometry('1320x860')
         self.window.minsize(1000, 650)
         self.window.configure(bg=BG)
@@ -83,9 +90,12 @@ class Editor:
         top = ttk.Frame(self.window, padding=(22, 18))
         top.pack(fill='x')
         ttk.Label(top, text='OpenCabinet', style='Heading.TLabel').pack(side='left')
-        ttk.Label(top, text='  /  Biblioteca de imágenes', style='Muted.TLabel').pack(side='left', pady=8)
-        ttk.Button(top, text='Actualizar biblioteca', command=self.refresh_libraries).pack(side='right')
-        self.status = tk.StringVar(value='Leyendo biblioteca…')
+        self.language_button = ttk.Button(top, text='ES' if language() == 'en' else 'EN', width=3,
+                                         command=self.toggle_language)
+        self.language_button.pack(side='left', padx=(10, 4))
+        localize(ttk.Label(top, style='Muted.TLabel'), '  /  Artwork library', values={}).pack(side='left', pady=8)
+        localize(ttk.Button(top, command=self.refresh_libraries), 'Refresh library', values={}).pack(side='right')
+        self.status = tk.StringVar(value=tr('Reading library…'))
         ttk.Label(self.window, textvariable=self.status, style='Muted.TLabel', padding=(24, 0, 24, 12)).pack(fill='x')
         paned = ttk.Panedwindow(self.window, orient='horizontal')
         paned.pack(fill='both', expand=True, padx=20, pady=(0, 18))
@@ -93,7 +103,7 @@ class Editor:
         right = ttk.Frame(paned)
         paned.add(left, weight=1)
         paned.add(right, weight=3)
-        ttk.Label(left, text='CONSOLA / BIBLIOTECA', style='Muted.TLabel').pack(anchor='w', pady=(0, 7))
+        localize(ttk.Label(left, style='Muted.TLabel'), 'CONSOLE / LIBRARY', values={}).pack(anchor='w', pady=(0, 7))
         self.console_filter = tk.StringVar()
         ttk.Entry(left, textvariable=self.console_filter).pack(fill='x', pady=(0, 8))
         self.console_filter.trace_add('write', lambda *_: self.filter_libraries())
@@ -101,8 +111,12 @@ class Editor:
         self.library_box = ttk.Combobox(left, textvariable=self.library_name, state='readonly', width=40)
         self.library_box.pack(fill='x')
         self.library_box.bind('<<ComboboxSelected>>', lambda _: self.load_library())
-        ttk.Button(left, text='Imágenes de la consola', command=self.show_console).pack(fill='x', pady=(8, 0))
-        ttk.Label(left, text='BUSCAR JUEGO O SERIAL', style='Muted.TLabel').pack(anchor='w', pady=(20, 7))
+        localize(ttk.Button(left, command=self.show_console), 'Console artwork', values={}).pack(fill='x', pady=(8, 0))
+        self.new_game_button = localize(ttk.Button(left, command=self.add_game), 'Add game from DAT', values={})
+        self.new_game_button.pack(fill='x', pady=(8, 0))
+        self.undo_game_button = localize(ttk.Button(left, command=self.undo_game), 'Undo last game registration', values={})
+        self.undo_game_button.pack(fill='x', pady=(6, 0))
+        localize(ttk.Label(left, style='Muted.TLabel'), 'SEARCH GAME OR SERIAL', values={}).pack(anchor='w', pady=(20, 7))
         self.query = tk.StringVar()
         self.search_entry = ttk.Entry(left, textvariable=self.query)
         self.search_entry.pack(fill='x')
@@ -112,7 +126,7 @@ class Editor:
         tree_frame = ttk.Frame(left)
         tree_frame.pack(fill='both', expand=True)
         self.tree = ttk.Treeview(tree_frame, columns=('serial',), show='tree headings', selectmode='browse')
-        self.tree.heading('#0', text='Juego')
+        localize_heading(self.tree, '#0', 'Game')
         self.tree.heading('serial', text='ID')
         self.tree.column('#0', width=285)
         self.tree.column('serial', width=115)
@@ -121,19 +135,19 @@ class Editor:
         self.tree.pack(side='left', fill='both', expand=True)
         scrollbar.pack(side='right', fill='y')
         self.tree.bind('<<TreeviewSelect>>', lambda _: self.select_game())
-        self.title = ttk.Label(right, text='Elegí un juego', style='Heading.TLabel', wraplength=760)
+        self.title = localize(ttk.Label(right, style='Heading.TLabel', wraplength=760), 'Choose a game', values={})
         self.title.pack(anchor='w', pady=(0, 6))
-        self.details = ttk.Label(right, text='Buscá por nombre, región o identificador.', style='Muted.TLabel', wraplength=760)
+        self.details = localize(ttk.Label(right, style='Muted.TLabel', wraplength=760), 'Search by name, region or identifier.', values={})
         self.details.pack(anchor='w', pady=(0, 12))
         extra = ttk.Frame(right)
         extra.pack(fill='x', pady=(0, 12))
-        ttk.Label(extra, text='Añadir tipo:').pack(side='left', padx=(0, 8))
+        localize(ttk.Label(extra), 'Add type:', values={}).pack(side='left', padx=(0, 8))
         self.kind = tk.StringVar(value='cover_back')
         self.kind_box = ttk.Combobox(extra, textvariable=self.kind, values=list(KINDS), width=20)
         self.kind_box.pack(side='left')
-        self.add_button = ttk.Button(extra, text='Importar imagen', style='Accent.TButton', command=self.import_kind)
+        self.add_button = localize(ttk.Button(extra, style='Accent.TButton', command=self.import_kind), 'Import image', values={})
         self.add_button.pack(side='left', padx=8)
-        self.undo_button = ttk.Button(extra, text='Deshacer cambio', command=self.undo)
+        self.undo_button = localize(ttk.Button(extra, command=self.undo), 'Undo change', values={})
         self.undo_button.pack(side='right')
         self.window.bind('<Control-f>', lambda _: self.search_entry.focus_set())
         self.window.bind('<Control-o>', lambda _: self.import_kind())
@@ -172,7 +186,7 @@ class Editor:
                 if error:
                     error(exc)
                 else:
-                    messagebox.showerror('No se pudo completar la acción', str(exc), parent=self.window)
+                    messagebox.showerror(tr('Could not complete the action'), str(exc), parent=self.window)
             else:
                 success(value)
         self.window.after(80, check)
@@ -184,7 +198,7 @@ class Editor:
         self.all_libraries = libraries
         self.filter_libraries()
         if not libraries:
-            self.count.set('Todavía no hay catálogos. Usá Actualizar cuando avance Run-Library.')
+            set_text(self.count, 'No catalogues yet. Refresh when Run-Library has made progress.')
 
     def filter_libraries(self):
         if not hasattr(self, 'all_libraries'):
@@ -194,6 +208,9 @@ class Editor:
                              if needle in search_key(r['system'])}
         values = list(self.library_rows)
         old = self.library_name.get()
+        if self.pending_game:
+            old = next((label for label, row in self.library_rows.items() if row['output'] == self.pending_game[0]), old)
+            self.library_name.set(old)
         self.library_box['values'] = values
         if old not in values:
             self.library_name.set(values[0] if values else '')
@@ -205,8 +222,8 @@ class Editor:
             self.games = {}
             self.tree.delete(*self.tree.get_children())
             self.clear_cards()
-            self.count.set('Sin bibliotecas para este filtro')
-            self.title.configure(text='Elegí una consola')
+            set_text(self.count, 'No libraries match this filter')
+            localize(self.title, 'Choose a console', values={})
             self.details.configure(text='')
             self.update_buttons()
 
@@ -218,9 +235,13 @@ class Editor:
         generation = self.generation
         output = row['output']
         selected = self.serial if self.current_output == output else None
+        if self.pending_game and self.pending_game[0] == output:
+            selected = self.pending_game[1]
         console_selected = self.console_mode and self.current_output == output
-        self.count.set('Leyendo nombres y carpetas…')
+        set_text(self.count, 'Reading names and folders…')
         def load():
+            if self.registration.has_pending(output):
+                self.registration.recover(output)
             catalog = self.store.read_catalog(output)
             games = dict(catalog.get('games', {}))
             for folder in output.iterdir():
@@ -233,6 +254,8 @@ class Editor:
             self.current_output = output
             self.catalog, self.games = result
             self.serial = selected
+            if self.pending_game and self.pending_game == (output, selected):
+                self.pending_game = None
             self.console_mode = False
             self.filter_games()
             if console_selected:
@@ -252,7 +275,7 @@ class Editor:
         rows = []
         for serial, game in self.games.items():
             titles = game_titles(game)
-            title = titles[0] if titles else f'{serial} · sin catálogo todavía'
+            title = titles[0] if titles else tr('{v0} · no catalogue yet', v0=serial)
             if all(term in search_key(' '.join([serial, *titles])) for term in needle.split()):
                 rows.append((title, serial))
         rows.sort(key=lambda row: search_key(row[0]))
@@ -264,13 +287,13 @@ class Editor:
             if serial == selected:
                 self.tree.selection_set(item)
                 self.tree.see(item)
-        self.count.set(f'{len(rows):,} juegos / carpetas')
+        set_text(self.count, '{v0:,} games / folders', v0=len(rows))
         if rows and not self.tree.selection():
             self.tree.selection_set('0')
         elif not rows:
             self.serial = None
             self.clear_cards()
-            self.title.configure(text='Sin coincidencias')
+            localize(self.title, 'No matches', values={})
 
     def clear_cards(self):
         for child in self.cards.winfo_children():
@@ -317,7 +340,7 @@ class Editor:
         generation, output = self.generation, self.current_output
         self.clear_cards()
         self.title.configure(text=self.catalog['system'])
-        self.details.configure(text=f'Imágenes de la consola\n{output}')
+        localize(self.details, 'Console artwork\n{v0}', values={'v0': output})
         self.kind_box.configure(values=list(CONSOLE_KINDS), state='readonly')
         if self.kind.get() not in CONSOLE_KINDS:
             self.kind.set('logo')
@@ -337,16 +360,16 @@ class Editor:
             card.grid(row=index//2, column=index%2, sticky='nsew', padx=(0, 10), pady=(0, 12))
             self.cards.columnconfigure(index%2, weight=1)
             titles = CONSOLE_KINDS if self.console_mode else KINDS
-            tk.Label(card, text=titles.get(kind, kind), bg=PANEL, fg=TEXT, font=('Segoe UI Semibold', 11)).pack(anchor='w')
+            localize(tk.Label(card, bg=PANEL, fg=TEXT, font=('Segoe UI Semibold', 11)), titles.get(kind, kind)).pack(anchor='w')
             tk.Label(card, text=label+('.pdf' if is_pdf else '.webp'), bg=PANEL, fg=MUTED).pack(anchor='w', pady=(2, 6))
-            preview = tk.Label(card, bg='#10151c', fg=MUTED, text='Sin imagen' if not asset else 'Cargando…', width=30, height=10)
+            preview = localize(tk.Label(card, bg='#10151c', fg=MUTED, width=30, height=10), 'No image' if not asset else 'Loading…', values={})
             preview.pack(fill='both', expand=True)
             if asset and is_pdf:
                 path = inside(output/asset['path'], output)
-                preview.configure(text=f"PDF · {asset.get('pages', '?')} páginas\n{asset['bytes']/1024:.1f} KiB\n\nPulsá para abrir el manual", cursor='hand2')
+                localize(preview, 'PDF · {v0} pages\n{v1:.1f} KiB\n\nClick to open the manual', values={'v0': asset.get('pages', '?'), 'v1': asset['bytes'] / 1024}, cursor='hand2')
                 preview.bind('<Button-1>', lambda _, p=path: self.open_pdf(p))
                 original_size = asset.get('compression', {}).get('candidate_bytes', {}).get('original', asset['bytes'])
-                tk.Label(card, text=f"Original: {original_size/1024:.1f} KiB · guardado: {asset['bytes']/1024:.1f} KiB", bg=PANEL, fg=MUTED).pack(anchor='w', pady=7)
+                localize(tk.Label(card, bg=PANEL, fg=MUTED), 'Original: {v0:.1f} KiB · saved: {v1:.1f} KiB', values={'v0': original_size / 1024, 'v1': asset['bytes'] / 1024}).pack(anchor='w', pady=7)
             elif asset:
                 path = inside(output/asset['path'], output)
                 def thumbnail(path=path):
@@ -363,25 +386,24 @@ class Editor:
                     widget.bind('<Button-1>', lambda _: self.view_image(path))
                 def unavailable(exc, widget=preview):
                     if widget.winfo_exists():
-                        widget.configure(text='No disponible · Actualizá la biblioteca')
+                        localize(widget, 'Unavailable · Refresh the library', values={})
                 self.task(thumbnail, loaded, unavailable)
                 compression = asset.get('compression', {})
-                mode = 'sin pérdida' if compression.get('lossless') else 'calidad 90' if compression else ''
-                extra = ' · manual' if asset.get('manual') else ''
+                mode = tr('lossless') if compression.get('lossless') else tr('quality 90') if compression else ''
+                extra = tr(' · edited') if asset.get('manual') else ''
                 tk.Label(card, text=f"{asset.get('width', '?')} × {asset.get('height', '?')} · {asset['bytes']/1024:.1f} KiB · {mode}{extra}",
                          bg=PANEL, fg=MUTED).pack(anchor='w', pady=7)
             actions = ttk.Frame(card)
             actions.pack(fill='x', pady=(6, 0))
-            button = ttk.Button(actions, text='Reemplazar' if asset else 'Importar',
-                                command=lambda k=kind, l=label: self.import_image(k, l))
+            button = localize(ttk.Button(actions, command=lambda k=kind, l=label: self.import_image(k, l)), 'Replace' if asset else 'Import', values={})
             button.pack(side='left')
             self.action_buttons.append(button)
             if not self.console_mode:
-                variant = ttk.Button(actions, text='+ Variante', command=lambda k=kind: self.import_image(k, self.next_label(k)))
+                variant = localize(ttk.Button(actions, command=lambda k=kind: self.import_image(k, self.next_label(k))), '+ Variant', values={})
                 variant.pack(side='left', padx=5)
                 self.action_buttons.append(variant)
             if asset and asset.get('manual'):
-                reset = ttk.Button(actions, text='Deshacer' if self.console_mode else 'Restaurar', command=lambda l=label: self.reset(l))
+                reset = localize(ttk.Button(actions, command=lambda l=label: self.reset(l)), 'Undo' if self.console_mode else 'Restore', values={})
                 reset.pack(side='left')
                 self.action_buttons.append(reset)
         self.update_buttons()
@@ -398,10 +420,10 @@ class Editor:
     def import_kind(self):
         kind = self.kind.get().strip()
         if not re.fullmatch(r'[a-z][a-z0-9_]{0,39}', kind):
-            messagebox.showerror('Tipo de imagen', 'Usá letras minúsculas, números y guiones bajos, por ejemplo cover_back.', parent=self.window)
+            messagebox.showerror(tr('Image type'), tr('Use lowercase letters, numbers and underscores, for example cover_back.'), parent=self.window)
             return
         if self.console_mode and kind not in CONSOLE_KINDS:
-            messagebox.showerror('Tipo de consola', 'Elegí logo, render o screenshot.', parent=self.window)
+            messagebox.showerror(tr('Console artwork type'), tr('Choose logo, render or screenshot.'), parent=self.window)
             return
         if self.serial or self.console_mode:
             self.import_image(kind, self.next_label(kind))
@@ -410,14 +432,14 @@ class Editor:
         if not self.can_edit():
             return
         is_pdf = kind == 'manual'
-        filename = filedialog.askopenfilename(parent=self.window, title=f"Importar {label}.{'pdf' if is_pdf else 'webp'}",
-            filetypes=[('Manuales PDF', '*.pdf')] if is_pdf else [('Imágenes', '*.png *.jpg *.jpeg *.webp'), ('Todos los archivos', '*.*')])
+        filename = filedialog.askopenfilename(parent=self.window, title=tr('Import {v0}.{v1}', v0=label, v1='pdf' if is_pdf else 'webp'),
+            filetypes=[(tr('PDF manuals'), '*.pdf')] if is_pdf else [(tr('Images'), '*.png *.jpg *.jpeg *.webp'), (tr('All files'), '*.*')])
         if not filename:
             return
         output, serial = self.current_output, self.serial
         console = self.console_mode
         self.busy = True
-        self.note.configure(text='Optimizando imágenes del PDF y comparando tamaños…' if is_pdf else 'Comparando WebP sin pérdida y calidad 90…')
+        localize(self.note, 'Optimizing PDF images and comparing file sizes…' if is_pdf else 'Comparing lossless WebP and quality 90…', values={})
         self.update_buttons()
         def work():
             if is_pdf:
@@ -434,17 +456,17 @@ class Editor:
             self.busy = False
             sizes = encoded['compression']['candidate_bytes']
             if is_pdf:
-                self.note.configure(text=f"Guardado {label}.pdf · {encoded['pages']} páginas · {sizes['original']/1024:.1f} → {encoded['bytes']/1024:.1f} KiB")
+                localize(self.note, 'Saved {v0}.pdf · {v1} pages · {v2:.1f} → {v3:.1f} KiB', values={'v0': label, 'v1': encoded['pages'], 'v2': sizes['original'] / 1024, 'v3': encoded['bytes'] / 1024})
             else:
-                self.note.configure(text=f"Guardado {label}.webp · sin pérdida: {sizes['lossless']/1024:.1f} KiB · calidad 90: {sizes['lossy90']/1024:.1f} KiB")
+                localize(self.note, 'Saved {v0}.webp · lossless: {v1:.1f} KiB · quality 90: {v2:.1f} KiB', values={'v0': label, 'v1': sizes['lossless'] / 1024, 'v2': sizes['lossy90'] / 1024})
             self.reload_game(output, serial, console)
         self.task(work, done, self.edit_failed)
 
     def edit_failed(self, exc):
         self.busy = False
-        self.note.configure(text='No se guardó el cambio. Los respaldos anteriores se conservan.')
+        localize(self.note, 'The change was not saved. Previous backups are preserved.', values={})
         self.update_buttons()
-        messagebox.showerror('No se pudo guardar', str(exc), parent=self.window)
+        messagebox.showerror(tr('Could not save'), str(exc), parent=self.window)
 
     def reload_game(self, output, serial, console=False):
         if self.current_output != output:
@@ -467,7 +489,7 @@ class Editor:
         self.update_buttons()
         def done(_):
             self.busy = False
-            self.note.configure(text='Cambio de consola deshecho.' if console else 'Imagen generada restaurada; el cambio manual quedó en el historial.')
+            self.note.configure(text='Cambio de consola deshecho.' if console else tr('Original artwork restored; the manual change remains in history.'))
             self.reload_game(output, serial, console)
         self.task(lambda: self.console_store.undo(output, label) if console else self.store.reset(output, serial, label), done, self.edit_failed)
 
@@ -481,6 +503,30 @@ class Editor:
         for button in [self.add_button, *self.action_buttons]:
             button.configure(state=state)
         self.undo_button.configure(state=state)
+        self.language_button.configure(state='disabled' if self.busy else 'normal')
+        available = not self.busy and not self.store.lock_status()
+        self.new_game_button.configure(state='normal' if available else 'disabled')
+        self.undo_game_button.configure(state='normal' if available and self.current_output and self.registration.can_undo(self.current_output) else 'disabled')
+
+    def add_game(self):
+        if self.busy or self.store.lock_status():
+            return
+        from game_dialog import AddGameDialog
+        return AddGameDialog(self)
+
+    def undo_game(self):
+        if self.busy or not self.current_output or self.store.lock_status():
+            return
+        output = self.current_output
+        if not messagebox.askyesno(tr('Undo game registration'), tr('This will undo the last game registration for this console. New games must be empty; existing artwork is preserved.'), parent=self.window):
+            return
+        self.busy = True
+        self.update_buttons()
+        def done(_):
+            self.busy = False
+            self.refresh_libraries()
+            self.update_buttons()
+        self.task(lambda: self.registration.undo(output), done, self.edit_failed)
 
     def undo(self):
         if not self.can_edit():
@@ -491,21 +537,46 @@ class Editor:
         self.update_buttons()
         def done(_):
             self.busy = False
-            self.note.configure(text='Último cambio de consola deshecho.' if console else 'Último cambio de este juego deshecho.')
+            localize(self.note, 'Last console change undone.' if console else 'Last change to this game undone.', values={})
             self.reload_game(output, serial, console)
         self.task(lambda: self.console_store.undo(output) if console else self.store.undo(output, serial), done, self.edit_failed)
 
     def poll_status(self):
         if self.closed:
             return
-        locked = self.store.lock_status()
-        self.status.set('Solo lectura · '+locked if locked else f'Edición disponible · Respaldos e historial: {self.store.manual}')
-        self.update_buttons()
+        self.refresh_status()
         self.window.after(1500, self.poll_status)
+
+    def refresh_status(self):
+        locked = self.store.lock_status()
+        if locked:
+            set_text(self.status, 'Read only · {v0}', v0=locked)
+        else:
+            set_text(self.status, 'Editing available · Backups and history: {v0}', v0=self.store.manual)
+        self.update_buttons()
+
+    def toggle_language(self):
+        if self.busy:
+            return
+        try:
+            set_language('es' if language() == 'en' else 'en', self.settings_file)
+        except OSError as exc:
+            messagebox.showerror(tr('Could not save language'), str(exc), parent=self.window)
+            return
+        refresh_translations()
+        self.language_button.configure(text='ES' if language() == 'en' else 'EN')
+        # Re-render only the current view; keep the library, filters, selection
+        # and image history unchanged.
+        if self.console_mode:
+            self.show_console()
+        elif self.catalog:
+            self.filter_games()
+            self.select_game()
+        self.refresh_status()
 
     def view_image(self, path):
         dialog = tk.Toplevel(self.window)
-        dialog.title(path.name+' · vista de píxeles')
+        localize_title(dialog, '{v0} · pixel view', v0=path.name)
         dialog.geometry('960x720')
         controls = ttk.Frame(dialog, padding=8)
         controls.pack(fill='x')
@@ -531,20 +602,20 @@ class Editor:
             canvas.delete('all')
             canvas.create_image(0, 0, image=photo, anchor='nw')
             canvas.configure(scrollregion=(0, 0, *size))
-        for label, scale in [('Ajustar', None), ('100%', 1), ('200%', 2), ('400%', 4)]:
-            ttk.Button(controls, text=label, command=lambda s=scale: zoom(s)).pack(side='left', padx=4)
-        ttk.Label(controls, text='Zoom sin suavizado para revisar los píxeles').pack(side='left', padx=16)
+        for label, scale in [('Fit', None), ('100%', 1), ('200%', 2), ('400%', 4)]:
+            localize(ttk.Button(controls, command=lambda s=scale: zoom(s)), label).pack(side='left', padx=4)
+        localize(ttk.Label(controls), 'Nearest-neighbor zoom to inspect pixels', values={}).pack(side='left', padx=16)
         dialog.after(100, lambda: zoom(1))
 
     def open_pdf(self, path):
         try:
             os.startfile(str(path))
         except OSError as exc:
-            messagebox.showerror('No se pudo abrir el manual', str(exc), parent=self.window)
+            messagebox.showerror(tr('Could not open the manual'), str(exc), parent=self.window)
 
     def close(self):
         if self.busy:
-            messagebox.showinfo('Guardando imagen', 'Esperá a que termine el guardado antes de cerrar.', parent=self.window)
+            messagebox.showinfo(tr('Operation in progress'), tr('Wait for the operation to finish before closing.'), parent=self.window)
             return
         self.closed = True
         self.pool.shutdown(wait=False, cancel_futures=True)
@@ -571,17 +642,18 @@ def main():
                        'frozen': bool(getattr(sys, 'frozen', False)), 'pillow': PIL.__version__,
                        'pdf': True, 'console_artwork': True})
         return result
+    initialize_language(settings_path())
     window = tk.Tk()
     window.withdraw()
     from editor_location import choose_library
     library = choose_library(args.root, settings_path(),
         lambda: filedialog.askdirectory(parent=window, mustexist=True, initialdir=str(args.root),
-                                       title='Seleccioná la biblioteca: carpeta que contiene las consolas'),
-        lambda text: messagebox.showerror('Biblioteca no encontrada', text, parent=window), args.samples)
+                                       title=tr('Select your library: the folder containing the consoles')),
+        lambda text: messagebox.showerror(tr('Library not found'), text, parent=window), args.samples)
     if library is None:
         window.destroy()
         return 0
-    editor = Editor(window, args.root, args.samples, library=library)
+    editor = Editor(window, args.root, args.samples, library=library, settings=settings_path())
     if not args.smoke_test:
         window.deiconify()
     if args.smoke_test:

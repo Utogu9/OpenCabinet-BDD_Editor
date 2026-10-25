@@ -15,8 +15,8 @@ COMPRESSION_POLICY = 'smallest-lossless-or-lossy90-v2'
 def settings_path():
     if getattr(sys, 'frozen', False):
         base = Path(os.environ.get('LOCALAPPDATA') or Path.home()/'AppData/Local')
-        return base/'OpenCabinet-BDD_Editor/editor-settings.json'
-    return ROOT/'editor-settings.json'
+        return base/'OpenCabinet-BDD_Editor/editor-setting.json'
+    return ROOT/'editor-setting.json'
 
 def compare_encodings(image, icc_profile=None):
     """Encode both candidates from the same pixels; prefer lossless on ties."""

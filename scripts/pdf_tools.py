@@ -1,4 +1,5 @@
 """Optimize PDF images without rasterizing pages or embedding unsupported WebP."""
+from i18n import tr
 from io import BytesIO
 from pathlib import Path
 import sys
@@ -14,19 +15,19 @@ def pdf_api():
     try:
         from pypdf import PdfReader, PdfWriter
     except ImportError:
-        raise ValueError('Falta pypdf. Instalá requirements-editor.txt antes de importar PDF.')
+        raise ValueError(tr('pypdf is missing. Install requirements-editor.txt before importing PDFs.'))
     return PdfReader, PdfWriter
 
 
 def read_pdf(data):
     PdfReader, _ = pdf_api()
     if len(data) > 300*1024**2:
-        raise ValueError('El PDF supera 300 MiB')
+        raise ValueError(tr('The PDF exceeds 300 MiB'))
     reader = PdfReader(BytesIO(data), strict=True)
     if reader.is_encrypted:
-        raise ValueError('Importá un PDF sin contraseña ni cifrado')
+        raise ValueError(tr('Import a PDF without a password or encryption'))
     if not reader.pages or len(reader.pages) > 2000:
-        raise ValueError('El PDF debe tener entre 1 y 2000 páginas')
+        raise ValueError(tr('The PDF must contain between 1 and 2000 pages'))
     return reader
 
 
@@ -38,7 +39,7 @@ def signature(reader):
 def optimize_pdf(path):
     path = Path(path)
     if path.stat().st_size > 300*1024**2:
-        raise ValueError('El PDF supera 300 MiB')
+        raise ValueError(tr('The PDF exceeds 300 MiB'))
     raw = path.read_bytes()
     reader = read_pdf(raw)
     PdfReader, PdfWriter = pdf_api()
@@ -57,7 +58,7 @@ def optimize_pdf(path):
         lossless.write(buffer)
         lossless_data = buffer.getvalue()
         if signature(read_pdf(lossless_data)) != original_signature:
-            raise ValueError('La optimización alteró las páginas o el texto del PDF')
+            raise ValueError(tr('Optimization altered the PDF pages or text'))
         candidates['lossless'] = lossless_data
         writer = PdfWriter(clone_from=PdfReader(BytesIO(lossless_data)))
         seen = set()
@@ -88,7 +89,7 @@ def optimize_pdf(path):
         writer.write(buffer)
         data = buffer.getvalue()
         if signature(read_pdf(data)) != original_signature:
-            raise ValueError('La optimización alteró las páginas o el texto del PDF')
+            raise ValueError(tr('Optimization altered the PDF pages or text'))
         candidates['jpeg90'] = data
     # Original wins ties. Lossless wins ties against JPEG recompression.
     chosen = min(candidates, key=lambda key: len(candidates[key]))

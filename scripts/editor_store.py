@@ -1,4 +1,5 @@
 """Local manual artwork, reversible exports and shared batch/editor locking."""
+from i18n import tr
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -19,19 +20,19 @@ def stamp():
 
 def component(value):
     if not value or value in {'.', '..'} or any(c in value for c in '/\\\x00:'):
-        raise ValueError('Nombre de carpeta no permitido')
+        raise ValueError(tr('Invalid folder name'))
     return value
 
 
 def inside(path, base):
     base, path = Path(base).resolve(), Path(path)
     if not path.resolve().is_relative_to(base) or path.resolve() == base:
-        raise ValueError('Ruta fuera de la biblioteca')
+        raise ValueError(tr('Path outside the library'))
     for parent in [path, *path.parents]:
         if parent == base:
             break
         if parent.exists() and is_link(parent):
-            raise ValueError('No se permiten enlaces en las rutas de edición')
+            raise ValueError(tr('Links are not allowed in editing paths'))
     return path.resolve()
 
 
@@ -55,26 +56,26 @@ def json_bytes(value):
 def encode_import(path):
     path = Path(path)
     if path.stat().st_size > 100*1024**2:
-        raise ValueError('La imagen supera 100 MiB')
+        raise ValueError(tr('The image exceeds 100 MiB'))
     raw = path.read_bytes()
     with Image.open(BytesIO(raw)) as original:
         if original.format not in {'PNG', 'JPEG', 'WEBP'}:
-            raise ValueError('Se admiten PNG, JPG y WebP')
+            raise ValueError(tr('PNG, JPG and WebP files are supported'))
         if getattr(original, 'n_frames', 1) != 1:
-            raise ValueError('La imagen debe ser estática')
+            raise ValueError(tr('The image must be static'))
         if original.width*original.height > 40_000_000:
-            raise ValueError('La imagen supera 40 megapíxeles')
+            raise ValueError(tr('The image exceeds 40 megapixels'))
         image = ImageOps.exif_transpose(original)
         alpha = 'A' in image.getbands() or 'transparency' in image.info
         image = image.convert('RGBA' if alpha else 'RGB')
         data, compression = compare_encodings(image, original.info.get('icc_profile'))
         with Image.open(BytesIO(data)) as check:
             if check.size != image.size:
-                raise ValueError('La conversión cambió las dimensiones')
+                raise ValueError(tr('Conversion changed the dimensions'))
             if compression['lossless'] and check.convert('RGBA').tobytes() != image.convert('RGBA').tobytes():
-                raise ValueError('La conversión sin pérdida cambió los píxeles')
+                raise ValueError(tr('Lossless conversion changed the pixels'))
             if alpha and check.convert('RGBA').getchannel('A').tobytes() != image.getchannel('A').tobytes():
-                raise ValueError('La conversión cambió la transparencia')
+                raise ValueError(tr('Conversion changed the transparency'))
         return {'data': data, 'original': raw, 'filename': path.name, 'sha256': digest(data),
                 'source_sha256': digest(raw), 'source_format': original.format,
                 'width': image.width, 'height': image.height, 'alpha': alpha,
@@ -94,7 +95,7 @@ class ArtworkStore:
         path = inside(self.manual/'blobs'/(digest(data)+'.bin'), self.root)
         if path.exists():
             if path.read_bytes() != data:
-                raise ValueError('Copia de respaldo dañada')
+                raise ValueError(tr('Corrupted backup'))
         else:
             atomic_bytes(path, data)
         return str(path.relative_to(self.root))
@@ -103,7 +104,7 @@ class ArtworkStore:
         path = inside(self.root/relative, self.manual/'blobs')
         data = path.read_bytes()
         if path.stem != digest(data):
-            raise ValueError('Hash de respaldo inválido')
+            raise ValueError(tr('Invalid backup hash'))
         return data
 
     def state_path(self, output):
@@ -147,7 +148,7 @@ class ArtworkStore:
     def lock_status(self):
         lock = self.root/'reports/batch.lock'
         if lock.exists():
-            return 'Run-Library u otro editor está usando la biblioteca'
+            return tr('Run-Library or another editor is using the library')
         return ''
 
     @contextmanager
@@ -157,7 +158,7 @@ class ArtworkStore:
         try:
             handle = lock.open('x', encoding='utf-8')
         except FileExistsError:
-            raise ValueError('La biblioteca está en uso. Esperá a que termine Run-Library antes de editar.')
+            raise ValueError(tr('The library is in use. Wait for Run-Library to finish before editing.'))
         try:
             with handle:
                 handle.write(json.dumps({'pid': os.getpid(), 'started_at_utc': stamp(), 'owner': 'artwork-editor'}))
@@ -176,14 +177,14 @@ class ArtworkStore:
         catalog_path = inside(output/'catalog.json', output)
         if catalog_path.exists() and digest(catalog_path.read_bytes()) not in {
                 digest(base), state['applied_catalog_sha256']}:
-            raise ValueError('El catálogo cambió fuera del editor; no se sobrescribe')
+            raise ValueError(tr('The catalogue changed outside the editor; it will not be overwritten'))
         plan = []
         for relative, record in state['files'].items():
             destination = inside(output/relative, output)
             previous = self.read_blob(record['base']) if record['base'] else None
             if destination.exists() and digest(destination.read_bytes()) not in {
                     record['manual_sha256'], digest(previous) if previous is not None else None}:
-                raise ValueError(f'La imagen cambió fuera del editor: {relative}')
+                raise ValueError(tr('The image changed outside the editor: {v0}', v0=relative))
             plan.append((destination, previous))
         for destination, previous in plan:
             if previous is None:
@@ -213,22 +214,22 @@ class ArtworkStore:
             manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
             for label, asset in manifest['images'].items():
                 if not re.fullmatch(r'[a-z][a-z0-9_]{0,47}', label):
-                    raise ValueError('Nombre de imagen manual inválido')
+                    raise ValueError(tr('Invalid manual image name'))
                 extension = asset.get('extension', 'webp')
                 if extension not in {'webp', 'pdf'}:
-                    raise ValueError('Extensión manual no admitida')
+                    raise ValueError(tr('Unsupported manual extension'))
                 relative = f'{component(serial)}/{label}.{extension}'
                 destination = inside(output/relative, output)
                 data = self.read_blob(asset['blob'])
                 if digest(data) != asset['sha256']:
-                    raise ValueError('Imagen manual dañada')
+                    raise ValueError(tr('Corrupted manual image'))
                 base_asset = game['images'].get(label)
                 if destination.exists() and (base_asset is None or base_asset['path'] != relative):
-                    raise ValueError(f'Archivo sin catalogar: {relative}')
+                    raise ValueError(tr('Uncatalogued file: {v0}', v0=relative))
                 base_destination = inside(output/base_asset['path'], output) if base_asset else destination
                 previous = base_destination.read_bytes() if base_destination.exists() else None
                 if base_asset and (previous is None or digest(previous) != base_asset['sha256']):
-                    raise ValueError(f'La imagen generada cambió: {relative}')
+                    raise ValueError(tr('The generated image changed: {v0}', v0=relative))
                 if base_asset and base_asset['path'] != relative:
                     files[base_asset['path']] = {'base': self.blob(previous), 'manual_sha256': None}
                     payloads[base_asset['path']] = None
@@ -266,19 +267,19 @@ class ArtworkStore:
     def save(self, output, serial, kind, label, encoded):
         output = self.output(output)
         if not re.fullmatch(r'[a-z][a-z0-9_]{0,47}', label) or not re.fullmatch(r'[a-z][a-z0-9_]{0,39}', kind):
-            raise ValueError('Usá letras minúsculas, números y guiones bajos para el tipo')
+            raise ValueError(tr('Use lowercase letters, numbers and underscores for the type'))
         if (kind == 'manual') != (encoded.get('format') == 'PDF'):
-            raise ValueError('El tipo manual admite PDF completos; los otros tipos admiten imágenes')
+            raise ValueError(tr('The manual type accepts complete PDFs; other types accept images'))
         with self.writer():
             catalog = self.read_catalog(output)
             if catalog.get('status') not in {'complete', 'sample_complete'} or catalog.get('schema_version') != 2:
-                raise ValueError('Esperá a que esta consola termine de generarse')
+                raise ValueError(tr('Wait for this console to finish generating'))
             if serial not in catalog['games']:
-                raise ValueError('El juego ya no está en este catálogo')
+                raise ValueError(tr('The game is no longer in this catalogue'))
             for existing_label, image in catalog['games'][serial]['images'].items():
                 if existing_label != label and image['kind'] == kind and image['sha256'] == encoded['sha256']:
                     if inside(output/image['path'], output).read_bytes() == encoded['data']:
-                        raise ValueError(f"Este archivo ya existe como {Path(image['path']).name}; no se crea un duplicado")
+                        raise ValueError(tr('This file already exists as {v0}; no duplicate will be created', v0=Path(image['path']).name))
             path = self.manifest_path(catalog['system'], serial)
             previous_manifest = path.read_bytes() if path.exists() else None
             manifest = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {
@@ -323,11 +324,11 @@ class ArtworkStore:
             catalog = self.read_catalog(output)
             path = self.manifest_path(catalog['system'], serial)
             if not path.exists():
-                raise ValueError('No hay cambios para deshacer en este juego')
+                raise ValueError(tr('There are no changes to undo for this game'))
             previous_manifest = path.read_bytes()
             manifest = json.loads(previous_manifest)
             if not manifest.get('history'):
-                raise ValueError('No hay más cambios para deshacer en este juego')
+                raise ValueError(tr('There are no more changes to undo for this game'))
             event = manifest['history'].pop()
             label = event['label']
             manifest.setdefault('undone_changes', []).append({'label': label,
@@ -350,36 +351,36 @@ class ArtworkStore:
         state_path = self.state_path(output)
         if not state_path.exists():
             if actual.get('manual_edits'):
-                raise ValueError('Falta el respaldo del catálogo editado')
+                raise ValueError(tr('The edited catalogue backup is missing'))
             return actual, {}, set()
         state = json.loads(state_path.read_text(encoding='utf-8'))
         if digest((output/'catalog.json').read_bytes()) != state['applied_catalog_sha256']:
-            raise ValueError('Edición incompleta o catálogo manual modificado')
+            raise ValueError(tr('Incomplete edit or manually modified catalogue'))
         base = json.loads(self.read_blob(state['base_catalog']))
         redirects, extras = {}, set()
         for relative, record in state['files'].items():
             path = inside(output/relative, output)
             if record['manual_sha256'] is None:
                 if path.exists():
-                    raise ValueError('Archivo retirado de la edición reapareció')
+                    raise ValueError(tr('A file removed by the edit has reappeared'))
                 self.read_blob(record['base'])
                 redirects[relative] = inside(self.root/record['base'], self.manual/'blobs')
                 continue
             if digest(path.read_bytes()) != record['manual_sha256']:
-                raise ValueError('La imagen manual cambió fuera del editor')
+                raise ValueError(tr('The manual image changed outside the editor'))
             serial, filename = relative.split('/')
             asset = actual['games'][serial]['images'][Path(filename).stem]
             manual = asset['manual']
             data, original = self.read_blob(manual['blob']), self.read_blob(manual['original_blob'])
             if digest(original) != manual['source_sha256'] or digest(data) != asset['sha256'] or path.read_bytes() != data:
-                raise ValueError('Procedencia manual inválida')
+                raise ValueError(tr('Invalid manual provenance'))
             if asset.get('format') == 'PDF':
                 from pdf_tools import read_pdf, signature
                 pdf = read_pdf(data)
                 if len(pdf.pages) != asset['pages'] or signature(pdf) != signature(read_pdf(original)):
-                    raise ValueError('Páginas o texto del manual alterados')
+                    raise ValueError(tr('Manual pages or text were altered'))
                 if len(data) != asset['bytes'] or asset['bytes'] != min(asset['compression']['candidate_bytes'].values()):
-                    raise ValueError('Tamaño del manual inválido')
+                    raise ValueError(tr('Invalid manual size'))
                 if record['base']:
                     self.read_blob(record['base'])
                     redirects[relative] = inside(self.root/record['base'], self.manual/'blobs')
@@ -388,13 +389,13 @@ class ArtworkStore:
                 continue
             with Image.open(BytesIO(original)) as source, Image.open(BytesIO(data)) as converted:
                 if converted.format != 'WEBP' or converted.size != (asset['width'], asset['height']):
-                    raise ValueError('Dimensiones manuales inválidas')
+                    raise ValueError(tr('Invalid manual dimensions'))
                 decision = asset['compression']
                 sizes = decision['candidate_bytes']
                 if asset['bytes'] != min(sizes.values()) or decision['lossless'] != (sizes['lossless'] <= sizes['lossy90']):
-                    raise ValueError('Elección de compresión manual inválida')
+                    raise ValueError(tr('Invalid manual compression choice'))
                 if decision['lossless'] and ImageOps.exif_transpose(source).convert('RGBA').tobytes() != converted.convert('RGBA').tobytes():
-                    raise ValueError('Píxeles manuales sin pérdida inválidos')
+                    raise ValueError(tr('Invalid lossless manual pixels'))
             if record['base']:
                 self.read_blob(record['base'])
                 redirects[relative] = inside(self.root/record['base'], self.manual/'blobs')

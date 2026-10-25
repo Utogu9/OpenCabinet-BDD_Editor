@@ -22,7 +22,15 @@ This folder contains only the editor. Download the artwork separately; DAT files
 
 To test the interface using temporary files: `Run-Editor.cmd --self-test`.
 
-To publish a Windows release, push a version tag such as `v1.0.0`. GitHub Actions runs the tests, builds and tests the standalone executable, then attaches the `.exe` and its SHA-256 checksum to the Release. The workflow can also be run manually from **Actions** to produce a downloadable build artifact.
+### Adding a missing game
+
+Click **Add game from DAT**, choose the console and provider, then **Download / update DAT** or **Import DAT/ZIP**. Search by name or serial, select the exact region/revision/disc entry and confirm the identifiers to create. Existing game folders are reused; their images are preserved. New consoles can also be added to the selected library.
+
+Only No-Intro and Redump identifiers are accepted, using the same serial normalization, folder substitutions, collision checks and placeholder exclusions as Run-Library. A search result is a candidate for explicit selection, never an automatic assignment to a different region or revision. Entries without a valid identifier cannot be created. Wii supports Redump disc serials and No-Intro Wii Digital CDN title IDs.
+
+DAT files are cached locally with their hashes and source information. If No-Intro requires an interactive download, open its website and import the official Standard DAT/ZIP. If that export lacks serials, import the original **DB Export** XML/ZIP afterwards: only missing serials are filled from primary media/digital fields, matching complete game names. PCB numbers, ROM hashes and database entry numbers are never used as game folder identifiers. The selected entry and DAT provenance are recorded in `catalog.json`; its existing primary DAT metadata is preserved.
+
+**Undo last game registration** reverses the last registration for the selected console. New game folders must be empty: undo their imported images first. Registration preserves existing image history and has a recovery journal for interrupted writes. The private `dat-cache` folder is not part of an artwork contribution.
 
 ## Español
 
@@ -44,4 +52,12 @@ Esta carpeta contiene únicamente el editor. Las imágenes se descargan aparte; 
 
 Para comprobar la interfaz con archivos temporales: `Run-Editor.cmd --self-test`.
 
-Para publicar una versión de Windows, subí una etiqueta de versión como `v1.0.0`. GitHub Actions ejecuta las pruebas, compila y prueba el ejecutable independiente y adjunta el `.exe` con su checksum SHA-256 a la Release. También se puede ejecutar manualmente desde **Actions** para obtener una compilación descargable.
+### Agregar un juego que falta
+
+Pulsá **Agregar juego desde DAT**, elegí la consola y el proveedor, y usá **Descargar / actualizar DAT** o **Importar DAT/ZIP**. Buscá por nombre o serial, seleccioná la entrada exacta de región/revisión/disco y confirmá los identificadores que querés crear. Las carpetas de juegos existentes se reutilizan y conservan sus imágenes. También se pueden agregar consolas nuevas a la biblioteca seleccionada.
+
+Solo se admiten identificadores de No-Intro y Redump, con las mismas normalizaciones de seriales, sustituciones de caracteres de carpeta, comprobaciones de colisiones y exclusiones de marcadores que Run-Library. Los resultados requieren una selección explícita: nunca se asigna automáticamente otra región o revisión. No se crean entradas sin un identificador válido. Wii admite seriales de discos Redump y Title IDs de No-Intro Wii Digital CDN.
+
+Los DAT quedan en una caché local con sus hashes y procedencia. Si No-Intro requiere una descarga interactiva, abrí su sitio e importá el DAT/ZIP Standard oficial. Si faltan seriales, importá después el XML/ZIP original **DB Export**: solo se completan los seriales ausentes usando los campos primarios de medio/digital y la coincidencia del nombre completo. Nunca se usan códigos de PCB, hashes de ROM ni números internos de entrada como identificadores de carpeta. La entrada seleccionada y la procedencia del DAT quedan en `catalog.json`; se conservan los metadatos del DAT principal existente.
+
+**Deshacer última alta de juego** revierte la última incorporación de la consola seleccionada. Las carpetas de juegos nuevos deben estar vacías: primero deshacé sus imágenes importadas. Las altas preservan el historial de imágenes existente y tienen un registro de recuperación ante escrituras interrumpidas. La carpeta privada `dat-cache` no forma parte de una contribución de imágenes.

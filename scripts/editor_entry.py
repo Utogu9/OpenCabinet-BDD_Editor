@@ -1,4 +1,5 @@
 """Entry point for the windowed executable, including unattended failure logs."""
+from i18n import tr
 import sys
 import traceback
 
@@ -22,7 +23,7 @@ if __name__ == '__main__':
             from tkinter import messagebox
             window = tk.Tk()
             window.withdraw()
-            messagebox.showerror('OpenCabinet-BDD_Editor', 'The editor could not start.\n'+str(log), parent=window)
+            messagebox.showerror('OpenCabinet-BDD_Editor', tr('The editor could not start.\n{v0}', v0=log), parent=window)
             window.destroy()
         if sys.stderr:
             sys.stderr.write(details)
