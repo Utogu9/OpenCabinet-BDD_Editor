@@ -16,6 +16,8 @@ To run from source:
 
 Search games, replace images, add variants, console artwork and PDF manuals. The editor compares lossless WebP with quality 90 WebP and keeps the smaller file. Changes are saved to the selected library and its catalogues are updated.
 
+**Import image** and **+ Variant** add a new numbered file when that type already exists (for example, `logo2.svg`, `screenshot2.webp` or `manual2.pdf`). **Replace** changes only the selected file. This applies to both game and console artwork; byte-identical duplicates are rejected, and changes can be undone.
+
 Backups and history are stored in `_editor` inside the selected library; if the library is named `generated`, they are stored in `manual` alongside it. Keep these backups to undo changes.
 
 Console logos support original SVG files as well as WebP. SVGs are previewed locally without changing the original; replacing a logo between SVG and WebP preserves undo history and attribution. Other image types use the WebP comparison described above.
@@ -59,6 +61,8 @@ Para ejecutar desde el código fuente:
 3. Elegí la carpeta que contiene las consolas y sus `catalog.json`. Puede estar en cualquier ubicación y tener cualquier nombre.
 
 Permite buscar juegos, reemplazar imágenes, agregar variantes, imágenes de consola y manuales PDF. Compara WebP sin pérdida y calidad 90 y conserva el menor. Guarda los cambios en la biblioteca seleccionada y actualiza sus catálogos.
+
+**Importar imagen** y **+ Variante** agregan un archivo numerado cuando ya existe ese tipo (por ejemplo, `logo2.svg`, `screenshot2.webp` o `manual2.pdf`). **Reemplazar** modifica únicamente el archivo seleccionado. Se aplica a imágenes de juegos y consolas y a los manuales; no se crean duplicados idénticos byte por byte y los cambios se pueden deshacer.
 
 Los respaldos e historial quedan en `_editor` dentro de la biblioteca elegida; si se llama `generated`, quedan en `manual` junto a ella. Conservalos para poder deshacer cambios.
 

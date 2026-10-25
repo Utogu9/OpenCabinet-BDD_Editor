@@ -99,6 +99,33 @@ class SvgLogoTests(unittest.TestCase):
             self.console.save(self.output, 'logo', encode_svg(self.svg))
         self.assertEqual((self.output / 'logo.svg').read_bytes(), b'Uncatalogued user content')
 
+    def test_svg_variant_uses_separate_label_across_formats_and_undo(self):
+        first = encode_svg(self.svg)
+        first['sources'] = [{'author': 'Original artist'}]
+        self.console.save(self.output, 'logo', first)
+        self.svg.write_bytes(SVG.replace(b'red', b'blue'))
+        second = encode_svg(self.svg)
+        self.console.save(self.output, 'logo', second, 'logo2', create_only=True)
+        self.assertEqual(self.console.next_label(self.output, 'logo'), 'logo3')
+        self.console.save(self.output, 'logo', encode_import(self.png), 'logo2')
+        self.assertFalse((self.output/'logo2.svg').exists())
+        self.assertTrue((self.output/'logo2.webp').exists())
+        self.console.undo(self.output, 'logo2')
+        self.assertEqual((self.output/'logo2.svg').read_bytes(), second['data'])
+        self.assertFalse((self.output/'logo2.webp').exists())
+        images = self.console.images(self.output)
+        self.assertEqual(set(images), {'logo', 'logo2'})
+        self.assertEqual(images['logo']['sources'], first['sources'])
+        self.console.undo(self.output, 'logo2')
+        self.assertFalse((self.output/'logo2.svg').exists())
+        self.assertEqual((self.output/'logo.svg').read_bytes(), SVG)
+
+    def test_untracked_svg_variants_are_listed_and_reserve_their_number(self):
+        (self.output/'logo.svg').write_bytes(SVG)
+        (self.output/'logo2.svg').write_bytes(SVG.replace(b'red', b'blue'))
+        self.assertEqual(set(self.console.images(self.output)), {'logo', 'logo2'})
+        self.assertEqual(self.console.next_label(self.output, 'logo'), 'logo3')
+
 
 if __name__ == '__main__':
     unittest.main()

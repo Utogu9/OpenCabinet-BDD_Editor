@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import time
+import traceback
 import tkinter as tk
 from unittest.mock import patch
 
@@ -47,7 +48,7 @@ def run():
         window.withdraw()
         editor = Editor(window, root)
         failures = []
-        window.report_callback_exception = lambda typ, value, tb: failures.append(str(value))
+        window.report_callback_exception = lambda typ, value, tb: failures.append(''.join(traceback.format_exception(typ, value, tb)))
         stage, started = 0, time.monotonic()
         dialog = None
         def tick():
@@ -93,6 +94,17 @@ def run():
                     stage = 3
                 elif stage == 3 and not editor.busy:
                     assert (folder/'cover_front.webp').read_bytes() == encoded['data']
+                    editor.kind.set('cover_front')
+                    editor.import_kind()
+                    stage = 31
+                elif stage == 31 and not editor.busy:
+                    assert (folder/'cover_front2.webp').exists()
+                    assert (folder/'cover_front.webp').read_bytes() == encoded['data']
+                    assert editor.catalog['games']['TEST-1']['images']['cover_front2']['kind'] == 'cover_front'
+                    editor.undo()
+                    stage = 32
+                elif stage == 32 and not editor.busy:
+                    assert not (folder/'cover_front2.webp').exists()
                     editor.kind.set('disc')
                     editor.import_kind()
                     stage = 4
@@ -151,6 +163,32 @@ def run():
                     editor.view_image(output/'logo.svg')
                     viewer = next(w for w in window.winfo_children() if isinstance(w, tk.Toplevel) and 'SVG' in w.title())
                     viewer.withdraw()
+                    editor.kind.set('logo')
+                    editor.import_kind()
+                    stage = 125
+                elif stage == 125 and not editor.busy:
+                    assert (output/'logo.svg').read_bytes() == vector.read_bytes()
+                    assert (output/'logo2.webp').exists()
+                    assert set(editor.console_store.images(output)) == {'logo', 'logo2'}
+                    replacement = root/'second-logo.svg'
+                    replacement.write_bytes(vector.read_bytes().replace(b'red', b'blue'))
+                    with patch('artwork_editor.filedialog.askopenfilename', return_value=str(replacement)):
+                        editor.import_image('logo', 'logo2')
+                    stage = 126
+                elif stage == 126 and not editor.busy:
+                    assert (output/'logo2.svg').exists()
+                    assert not (output/'logo2.webp').exists()
+                    assert (output/'logo.svg').read_bytes() == vector.read_bytes()
+                    editor.reset('logo2')
+                    stage = 127
+                elif stage == 127 and not editor.busy:
+                    assert (output/'logo2.webp').exists()
+                    assert not (output/'logo2.svg').exists()
+                    editor.undo()
+                    stage = 128
+                elif stage == 128 and not editor.busy:
+                    assert not (output/'logo2.webp').exists()
+                    assert (output/'logo.svg').read_bytes() == vector.read_bytes()
                     editor.import_image('logo', 'logo')
                     stage = 122
                 elif stage == 122 and not editor.busy:
@@ -204,8 +242,8 @@ def run():
                     assert editor.language_button.cget('text') == 'EN'
                     editor.close()
                     return
-            except Exception as exc:
-                failures.append(str(exc))
+            except Exception:
+                failures.append(f'Stage {stage}:\n' + traceback.format_exc())
                 editor.closed = True
                 editor.pool.shutdown(wait=True, cancel_futures=True)
                 window.destroy()
@@ -219,6 +257,8 @@ def run():
              patch('game_dialog.messagebox.askyesno',return_value=True):
             window.after(100, tick)
             window.mainloop()
+            if failures:
+                raise AssertionError('\n'.join(failures))
             assert open_pdf.call_count == 1
         if failures:
             raise AssertionError('\n'.join(failures))
@@ -240,7 +280,8 @@ def run():
                           'production_data_modified':False, 'add_game_from_dat':True,
                           'new_game_image_and_undo':True, 'undo_game_registration':True,
                           'english_default':True, 'live_language_switch':True, 'saved_language_restart':True,
-                          'svg_logo_import_preview_replace_undo':True}))
+                          'svg_logo_import_preview_replace_undo':True,
+                          'game_and_console_import_variants':True}))
         return 0
 
 

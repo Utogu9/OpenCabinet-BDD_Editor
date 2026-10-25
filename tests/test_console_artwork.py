@@ -78,6 +78,48 @@ class ConsoleArtworkTests(unittest.TestCase):
         self.assertFalse((self.output/'console_artwork.json').exists())
         self.assertEqual((self.output/'catalog.json').read_bytes(), self.catalog)
 
+    def test_each_console_type_can_add_replace_and_undo_independent_variants(self):
+        first = encode_import(self.image)
+        Image.new('RGB', (30, 30), 'red').save(self.image)
+        second = encode_import(self.image)
+        Image.new('RGB', (30, 30), 'green').save(self.image)
+        third = encode_import(self.image)
+        for kind in CONSOLE_KINDS:
+            with self.subTest(kind=kind):
+                self.console.save(self.output, kind, first, create_only=True)
+                label = self.console.next_label(self.output, kind)
+                self.assertEqual(label, kind+'2')
+                self.console.save(self.output, kind, second, label, create_only=True)
+                self.console.save(self.output, kind, third, label)
+                self.assertEqual((self.output/(kind+'.webp')).read_bytes(), first['data'])
+                self.assertEqual((self.output/(label+'.webp')).read_bytes(), third['data'])
+                self.assertEqual(self.console.images(self.output)[label]['kind'], kind)
+                self.console.undo(self.output, label)
+                self.assertEqual((self.output/(label+'.webp')).read_bytes(), second['data'])
+                self.console.undo(self.output, label)
+                self.assertFalse((self.output/(label+'.webp')).exists())
+                self.assertEqual((self.output/(kind+'.webp')).read_bytes(), first['data'])
+
+    def test_import_refuses_occupied_label_and_duplicate_bytes(self):
+        encoded = encode_import(self.image)
+        self.console.save(self.output, 'render', encoded, create_only=True)
+        with self.assertRaises(ValueError):
+            self.console.save(self.output, 'render', encoded, create_only=True)
+        with self.assertRaises(ValueError):
+            self.console.save(self.output, 'render', encoded, 'render2', create_only=True)
+        self.assertFalse((self.output/'render2.webp').exists())
+        (self.output/'render2.webp').write_bytes(b'untracked file')
+        self.assertEqual(self.console.next_label(self.output, 'render'), 'render3')
+        with self.assertRaises(ValueError):
+            self.console.save(self.output, 'render', encoded, 'render2', create_only=True)
+        self.assertEqual((self.output/'render2.webp').read_bytes(), b'untracked file')
+
+    def test_variant_paths_are_validated(self):
+        encoded = encode_import(self.image)
+        for label in ('logo1', 'logo02', '../logo2', 'render2'):
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                self.console.save(self.output, 'logo', encoded, label)
+
 
 if __name__ == '__main__':
     unittest.main()

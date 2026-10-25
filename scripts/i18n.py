@@ -64,7 +64,8 @@ def localize_heading(tree, column, message, **values):
 
 
 def refresh_translations():
-    for key, (reference, kind, message, values) in list(_bindings.items()):
+    # Weakref cleanup can remove bindings during GC while building a list of items.
+    for key, (reference, kind, message, values) in _bindings.copy().items():
         target = reference()
         if target is None:
             _bindings.pop(key, None)

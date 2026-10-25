@@ -1,5 +1,6 @@
 """Spanish translations for English source messages."""
 SPANISH = {
+    "This variant already exists; refresh before importing again.": "Esta variante ya existe; actualizá antes de volver a importar.",
     "SVG is too large or contains unsupported entities.": "El SVG es demasiado grande o contiene entidades no admitidas.",
     "Expected an SVG image.": "Se esperaba una imagen SVG.",
     "Active SVG content is not supported.": "No se admite contenido activo en los SVG.",

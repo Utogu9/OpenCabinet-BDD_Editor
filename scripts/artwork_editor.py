@@ -354,7 +354,9 @@ class Editor:
         self.update_buttons()
         def done(images):
             if self.console_mode and self.current_output == output and self.generation == generation:
-                self.render_cards(list(CONSOLE_KINDS), images)
+                labels = sorted(images, key=lambda label: (list(CONSOLE_KINDS).index(images[label]['kind']), len(label), label))
+                labels.extend(kind for kind in CONSOLE_KINDS if not any(asset['kind'] == kind for asset in images.values()))
+                self.render_cards(labels, images)
         self.task(lambda: self.console_store.images(output), done)
 
     def render_cards(self, labels, images):
@@ -407,13 +409,12 @@ class Editor:
                          bg=PANEL, fg=MUTED).pack(anchor='w', pady=7)
             actions = ttk.Frame(card)
             actions.pack(fill='x', pady=(6, 0))
-            button = localize(ttk.Button(actions, command=lambda k=kind, l=label: self.import_image(k, l)), 'Replace' if asset else 'Import', values={})
+            button = localize(ttk.Button(actions, command=lambda k=kind, l=label, a=asset: self.import_image(k, l, create_only=not bool(a))), 'Replace' if asset else 'Import', values={})
             button.pack(side='left')
             self.action_buttons.append(button)
-            if not self.console_mode:
-                variant = localize(ttk.Button(actions, command=lambda k=kind: self.import_image(k, self.next_label(k))), '+ Variant', values={})
-                variant.pack(side='left', padx=5)
-                self.action_buttons.append(variant)
+            variant = localize(ttk.Button(actions, command=lambda k=kind: self.import_image(k, self.next_label(k), create_only=True)), '+ Variant', values={})
+            variant.pack(side='left', padx=5)
+            self.action_buttons.append(variant)
             if asset and asset.get('manual'):
                 reset = localize(ttk.Button(actions, command=lambda l=label: self.reset(l)), 'Undo' if self.console_mode else 'Restore', values={})
                 reset.pack(side='left')
@@ -422,8 +423,11 @@ class Editor:
 
     def next_label(self, kind):
         if self.console_mode:
-            return kind
-        images = self.games[self.serial].get('images', {})
+            return self.console_store.next_label(self.current_output, kind)
+        images = set(self.games[self.serial].get('images', {}))
+        directory = inside(self.current_output/self.serial, self.current_output)
+        if directory.exists():
+            images.update(path.stem for path in directory.iterdir())
         number = 1
         while (kind if number == 1 else f'{kind}{number}') in images:
             number += 1
@@ -438,9 +442,9 @@ class Editor:
             messagebox.showerror(tr('Console artwork type'), tr('Choose logo, render or screenshot.'), parent=self.window)
             return
         if self.serial or self.console_mode:
-            self.import_image(kind, self.next_label(kind))
+            self.import_image(kind, self.next_label(kind), create_only=True)
 
-    def import_image(self, kind, label):
+    def import_image(self, kind, label, *, create_only=False):
         if not self.can_edit():
             return
         is_pdf = kind == 'manual'
@@ -464,9 +468,9 @@ class Editor:
             else:
                 encoded = encode_import(filename)
             if console:
-                self.console_store.save(output, kind, encoded)
+                self.console_store.save(output, kind, encoded, label, create_only=create_only)
             else:
-                self.store.save(output, serial, kind, label, encoded)
+                self.store.save(output, serial, kind, label, encoded, create_only=create_only)
             return encoded
         def done(encoded):
             self.busy = False

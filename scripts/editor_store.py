@@ -264,7 +264,7 @@ class ArtworkStore:
             raise
         return count
 
-    def save(self, output, serial, kind, label, encoded):
+    def save(self, output, serial, kind, label, encoded, *, create_only=False):
         output = self.output(output)
         if not re.fullmatch(r'[a-z][a-z0-9_]{0,47}', label) or not re.fullmatch(r'[a-z][a-z0-9_]{0,39}', kind):
             raise ValueError(tr('Use lowercase letters, numbers and underscores for the type'))
@@ -276,6 +276,10 @@ class ArtworkStore:
                 raise ValueError(tr('Wait for this console to finish generating'))
             if serial not in catalog['games']:
                 raise ValueError(tr('The game is no longer in this catalogue'))
+            directory = inside(output/serial, output)
+            if create_only and (label in catalog['games'][serial]['images'] or
+                                (directory.exists() and any(path.stem == label for path in directory.iterdir()))):
+                raise ValueError(tr('This variant already exists; refresh before importing again.'))
             for existing_label, image in catalog['games'][serial]['images'].items():
                 if existing_label != label and image['kind'] == kind and image['sha256'] == encoded['sha256']:
                     if inside(output/image['path'], output).read_bytes() == encoded['data']:
