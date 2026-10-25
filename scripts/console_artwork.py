@@ -26,11 +26,22 @@ class ConsoleArtwork:
         values = json.loads(metadata.read_text(encoding='utf-8')).get('images', {}) if metadata.exists() else {}
         result = {}
         for kind in CONSOLE_KINDS:
-            path = inside(output/(kind+'.webp'), output)
+            record = values.get(kind, {})
+            filename = record.get('path', kind + '.webp')
+            if filename not in {kind + '.webp', kind + '.svg'} or (filename.endswith('.svg') and kind != 'logo'):
+                raise ValueError(tr('Invalid console artwork path.'))
+            path = inside(output/filename, output)
+            if not path.exists() and kind == 'logo' and not record:
+                path = inside(output/'logo.svg', output)
             if path.exists():
-                with Image.open(path) as image:
-                    result[kind] = {**values.get(kind, {}), 'path': path.name, 'kind': kind,
-                                    'width': image.width, 'height': image.height, 'bytes': path.stat().st_size}
+                if path.suffix == '.svg':
+                    from svg_tools import svg_info
+                    width, height = svg_info(path.read_bytes())
+                else:
+                    with Image.open(path) as image:
+                        width, height = image.size
+                result[kind] = {**record, 'path': path.name, 'kind': kind, 'format': 'SVG' if path.suffix == '.svg' else 'WEBP',
+                                'width': width, 'height': height, 'bytes': path.stat().st_size}
         return result
 
     def recover(self, pending):
@@ -70,7 +81,7 @@ class ConsoleArtwork:
             raise
 
     def save(self, output, kind, encoded):
-        if kind not in CONSOLE_KINDS or encoded.get('format') == 'PDF':
+        if kind not in CONSOLE_KINDS or encoded.get('format') == 'PDF' or (encoded.get('format') == 'SVG' and kind != 'logo'):
             raise ValueError(tr('Console artwork supports logo, render and screenshot in WebP'))
         with self.store.writer():
             output, metadata, history_path, pending = self.paths(output)
@@ -81,18 +92,32 @@ class ConsoleArtwork:
             values = json.loads(metadata.read_text(encoding='utf-8')) if metadata.exists() else {
                 'schema_version': 1, 'system': catalog['system'], 'images': {}}
             history = json.loads(history_path.read_text(encoding='utf-8')) if history_path.exists() else {'events': []}
-            destination = inside(output/(kind+'.webp'), output)
-            previous = destination.read_bytes() if destination.exists() else None
+            extension = 'svg' if encoded.get('format') == 'SVG' else 'webp'
+            destination = inside(output/(kind+'.'+extension), output)
             old = values['images'].get(kind)
+            previous_name = old.get('path', kind+'.webp') if old else kind+'.webp'
+            if not old and not (output/previous_name).exists() and kind == 'logo' and (output/'logo.svg').exists():
+                previous_name = 'logo.svg'
+            if previous_name not in {kind+'.webp', 'logo.svg' if kind == 'logo' else kind+'.webp'}:
+                raise ValueError(tr('Invalid console artwork path.'))
+            previous_path = inside(output/previous_name, output)
+            previous = previous_path.read_bytes() if previous_path.exists() else None
+            if destination != previous_path and destination.exists():
+                raise ValueError(tr('An uncatalogued console logo already exists at the destination.'))
             if old and (previous is None or digest(previous) != old['sha256']):
                 raise ValueError(tr('Console artwork changed outside the editor; refresh and review it'))
             history['events'].append({'kind': kind, 'previous': self.store.blob(previous) if previous is not None else None,
-                                      'metadata': old, 'at': stamp()})
+                                      'metadata': old, 'previous_path': previous_path.name,
+                                      'saved_path': destination.name, 'at': stamp()})
             asset = {k: encoded[k] for k in ('sha256', 'bytes', 'width', 'height', 'alpha', 'compression', 'filename', 'source_sha256')}
             asset.update({'path': destination.name, 'kind': kind,
-                          'original_blob': self.store.blob(encoded['original']), 'updated_at': stamp(), 'manual': True})
+                          'original_blob': self.store.blob(encoded['original']), 'updated_at': stamp(),
+                          'manual': encoded.get('manual', True), 'format': encoded.get('format', 'WEBP'), 'extension': extension})
+            if encoded.get('sources'):
+                asset['sources'] = encoded['sources']
             values['images'][kind] = asset
-            self.commit(pending, [(destination, encoded['data']), (metadata, json_bytes(values)),
+            changes = ([(previous_path, None)] if previous_path != destination else [])
+            self.commit(pending, [*changes, (destination, encoded['data']), (metadata, json_bytes(values)),
                                   (history_path, json_bytes(history))])
             return asset
 
@@ -109,8 +134,12 @@ class ConsoleArtwork:
                 raise ValueError(tr('There are no more console changes to undo'))
             event = history['events'].pop(index)
             values = json.loads(metadata.read_text(encoding='utf-8'))
-            target = inside(output/(event['kind']+'.webp'), output)
             current = values['images'].get(event['kind'])
+            allowed = {event['kind']+'.webp', 'logo.svg' if event['kind'] == 'logo' else event['kind']+'.webp'}
+            if (current and current.get('path', event['kind']+'.webp') not in allowed) or event.get('previous_path', event['kind']+'.webp') not in allowed:
+                raise ValueError(tr('Invalid console artwork path.'))
+            target = inside(output/(current.get('path') if current else event['kind']+'.webp'), output)
+            previous_path = inside(output/event.get('previous_path', event['kind']+'.webp'), output)
             if not current or not target.exists() or digest(target.read_bytes()) != current['sha256']:
                 raise ValueError(tr('Console artwork changed outside the editor'))
             history.setdefault('undone', []).append({'asset': current, 'at': stamp()})
@@ -119,4 +148,7 @@ class ConsoleArtwork:
             else:
                 values['images'][event['kind']] = event['metadata']
             data = self.store.read_blob(event['previous']) if event['previous'] else None
-            self.commit(pending, [(target, data), (metadata, json_bytes(values)), (history_path, json_bytes(history))])
+            if previous_path != target and previous_path.exists():
+                raise ValueError(tr('The previous console logo path is occupied.'))
+            changes = [(target, None), (previous_path, data)] if previous_path != target else [(target, data)]
+            self.commit(pending, [*changes, (metadata, json_bytes(values)), (history_path, json_bytes(history))])

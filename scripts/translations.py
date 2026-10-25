@@ -1,5 +1,16 @@
 """Spanish translations for English source messages."""
 SPANISH = {
+    "SVG is too large or contains unsupported entities.": "El SVG es demasiado grande o contiene entidades no admitidas.",
+    "Expected an SVG image.": "Se esperaba una imagen SVG.",
+    "Active SVG content is not supported.": "No se admite contenido activo en los SVG.",
+    "SVG external resources are not supported.": "No se admiten recursos externos en los SVG.",
+    "Invalid SVG dimensions.": "Dimensiones SVG no válidas.",
+    "Invalid console artwork path.": "Ruta de imagen de consola no válida.",
+    "An uncatalogued console logo already exists at the destination.": "Ya existe un logo de consola sin catalogar en el destino.",
+    "The previous console logo path is occupied.": "La ruta del logo anterior de la consola está ocupada.",
+    "Saved original SVG logo.": "Se guardó el logo SVG original.",
+    "{v0} · SVG preview": "{v0} · vista previa SVG",
+    "Vector preview; the original SVG is preserved.": "Vista previa vectorial; se conserva el SVG original.",
     "Close": "Cerrar",
     "Edit metadata": "Editar metadatos",
     "Game metadata": "Metadatos del juego",

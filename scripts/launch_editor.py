@@ -20,9 +20,9 @@ def main():
         print(tr('Preparing the editor environment...'), flush=True)
         venv.EnvBuilder(with_pip=True).create(environment)
     check = subprocess.run([str(python), '-c',
-        "import tkinter, PIL, pypdf; from PIL import features; "
+        "import tkinter, PIL, pypdf, resvg_py; from PIL import features; "
         "assert (10, 0) <= tuple(int(n) for n in PIL.__version__.split('.')[:2]) < (13, 0); "
-        "assert pypdf.__version__ == '6.21.2'; assert features.check('webp')"],
+        "assert pypdf.__version__ == '6.21.2'; assert resvg_py.__version__ == '0.5.0'; assert features.check('webp')"],
         capture_output=True)
     if check.returncode:
         print(tr('Installing editor dependencies (Internet access required)...'), flush=True)

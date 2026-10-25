@@ -96,7 +96,7 @@ class TranslationTests(unittest.TestCase):
         for english, spanish in SPANISH.items():
             self.assertEqual(fields(english),fields(spanish),english)
         folder = Path(__file__).resolve().parents[1]/'scripts'
-        for name in ['artwork_editor','game_dialog','editor_store','editor_location','console_artwork','pdf_tools','dat_catalog','game_registration','catalog_rules','launch_editor','editor_entry','metadata_store','metadata_dialog']:
+        for name in ['artwork_editor','game_dialog','editor_store','editor_location','console_artwork','pdf_tools','dat_catalog','game_registration','catalog_rules','launch_editor','editor_entry','metadata_store','metadata_dialog','svg_tools']:
             for node in ast.walk(ast.parse((folder/(name+'.py')).read_text(encoding='utf-8'))):
                 if not isinstance(node,ast.Call) or not isinstance(node.func,ast.Name):
                     continue

@@ -18,6 +18,8 @@ def run():
         Image.new('RGBA', (32, 24), (15, 40, 240, 180)).save(imported)
         original = root/'original.png'
         Image.new('RGB', (24, 24), 'red').save(original)
+        vector = root/'logo.svg'
+        vector.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40"><rect width="120" height="40" fill="red"/></svg>')
         encoded = encode_import(original)
         from pdf_tools import pdf_api
         _, PdfWriter = pdf_api()
@@ -140,6 +142,29 @@ def run():
                     stage = 12
                 elif stage == 12 and not editor.busy:
                     assert not (output/'render.webp').exists()
+                    with patch('artwork_editor.filedialog.askopenfilename', return_value=str(vector)):
+                        editor.import_image('logo', 'logo')
+                    stage = 121
+                elif stage == 121 and not editor.busy:
+                    assert (output/'logo.svg').read_bytes() == vector.read_bytes()
+                    assert not (output/'logo.webp').exists()
+                    editor.view_image(output/'logo.svg')
+                    viewer = next(w for w in window.winfo_children() if isinstance(w, tk.Toplevel) and 'SVG' in w.title())
+                    viewer.withdraw()
+                    editor.import_image('logo', 'logo')
+                    stage = 122
+                elif stage == 122 and not editor.busy:
+                    assert (output/'logo.webp').exists()
+                    assert not (output/'logo.svg').exists()
+                    editor.undo()
+                    stage = 123
+                elif stage == 123 and not editor.busy:
+                    assert (output/'logo.svg').read_bytes() == vector.read_bytes()
+                    assert not (output/'logo.webp').exists()
+                    editor.undo()
+                    stage = 124
+                elif stage == 124 and not editor.busy:
+                    assert not (output/'logo.svg').exists()
                     from game_dialog import AddGameDialog
                     dialog = AddGameDialog(editor,dat_cache)
                     dialog.window.withdraw()
@@ -214,7 +239,8 @@ def run():
                           'batch_lock':True, 'pdf_import_open_undo':True, 'console_root_artwork':True,
                           'production_data_modified':False, 'add_game_from_dat':True,
                           'new_game_image_and_undo':True, 'undo_game_registration':True,
-                          'english_default':True, 'live_language_switch':True, 'saved_language_restart':True}))
+                          'english_default':True, 'live_language_switch':True, 'saved_language_restart':True,
+                          'svg_logo_import_preview_replace_undo':True}))
         return 0
 
 

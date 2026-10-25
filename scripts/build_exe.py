@@ -14,7 +14,7 @@ def main():
     subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onefile',
                     '--windowed', '--noupx', '--name', NAME, '--distpath', str(ROOT/'dist'),
                     '--workpath', str(ROOT/'build'), '--specpath', str(ROOT/'build'),
-                    '--paths', str(ROOT/'scripts'), '--collect-all', 'PIL', '--collect-all', 'pypdf',
+                    '--paths', str(ROOT/'scripts'), '--collect-all', 'PIL', '--collect-all', 'pypdf', '--collect-all', 'resvg_py',
                     '--add-data', str(ROOT/'scripts/catalog_profiles.json')+';.',
                     '--hidden-import', 'check_artwork_editor', str(ROOT/'scripts/editor_entry.py')],
                    cwd=ROOT, check=True)

@@ -368,7 +368,7 @@ class Editor:
             self.cards.columnconfigure(index%2, weight=1)
             titles = CONSOLE_KINDS if self.console_mode else KINDS
             localize(tk.Label(card, bg=PANEL, fg=TEXT, font=('Segoe UI Semibold', 11)), titles.get(kind, kind)).pack(anchor='w')
-            tk.Label(card, text=label+('.pdf' if is_pdf else '.webp'), bg=PANEL, fg=MUTED).pack(anchor='w', pady=(2, 6))
+            tk.Label(card, text=Path(asset['path']).name if asset else label+('.pdf' if is_pdf else '.webp'), bg=PANEL, fg=MUTED).pack(anchor='w', pady=(2, 6))
             preview = localize(tk.Label(card, bg='#10151c', fg=MUTED, width=30, height=10), 'No image' if not asset else 'Loading…', values={})
             preview.pack(fill='both', expand=True)
             if asset and is_pdf:
@@ -380,6 +380,11 @@ class Editor:
             elif asset:
                 path = inside(output/asset['path'], output)
                 def thumbnail(path=path):
+                    if path.suffix.lower() == '.svg':
+                        from svg_tools import preview_svg
+                        im = preview_svg(path.read_bytes(), 400)
+                        im.thumbnail((320, 220), Image.Resampling.LANCZOS)
+                        return im
                     with Image.open(path) as im:
                         im = im.convert('RGBA')
                         im.thumbnail((320, 220), Image.Resampling.LANCZOS)
@@ -439,8 +444,9 @@ class Editor:
         if not self.can_edit():
             return
         is_pdf = kind == 'manual'
-        filename = filedialog.askopenfilename(parent=self.window, title=tr('Import {v0}.{v1}', v0=label, v1='pdf' if is_pdf else 'webp'),
-            filetypes=[(tr('PDF manuals'), '*.pdf')] if is_pdf else [(tr('Images'), '*.png *.jpg *.jpeg *.webp'), (tr('All files'), '*.*')])
+        logo = self.console_mode and kind == 'logo'
+        filename = filedialog.askopenfilename(parent=self.window, title=tr('Import {v0}.{v1}', v0=label, v1='pdf' if is_pdf else 'svg / webp' if logo else 'webp'),
+            filetypes=[(tr('PDF manuals'), '*.pdf')] if is_pdf else [(tr('Images'), '*.png *.jpg *.jpeg *.webp *.svg' if logo else '*.png *.jpg *.jpeg *.webp'), (tr('All files'), '*.*')])
         if not filename:
             return
         output, serial = self.current_output, self.serial
@@ -449,7 +455,10 @@ class Editor:
         localize(self.note, 'Optimizing PDF images and comparing file sizes…' if is_pdf else 'Comparing lossless WebP and quality 90…', values={})
         self.update_buttons()
         def work():
-            if is_pdf:
+            if logo and Path(filename).suffix.lower() == '.svg':
+                from svg_tools import encode_svg
+                encoded = encode_svg(filename)
+            elif is_pdf:
                 from pdf_tools import optimize_pdf
                 encoded = optimize_pdf(filename)
             else:
@@ -462,7 +471,9 @@ class Editor:
         def done(encoded):
             self.busy = False
             sizes = encoded['compression']['candidate_bytes']
-            if is_pdf:
+            if encoded.get('format') == 'SVG':
+                localize(self.note, 'Saved original SVG logo.', values={})
+            elif is_pdf:
                 localize(self.note, 'Saved {v0}.pdf · {v1} pages · {v2:.1f} → {v3:.1f} KiB', values={'v0': label, 'v1': encoded['pages'], 'v2': sizes['original'] / 1024, 'v3': encoded['bytes'] / 1024})
             else:
                 localize(self.note, 'Saved {v0}.webp · lossless: {v1:.1f} KiB · quality 90: {v2:.1f} KiB', values={'v0': label, 'v1': sizes['lossless'] / 1024, 'v2': sizes['lossy90'] / 1024})
@@ -593,8 +604,9 @@ class Editor:
         self.refresh_status()
 
     def view_image(self, path):
+        is_svg = path.suffix.lower() == '.svg'
         dialog = tk.Toplevel(self.window)
-        localize_title(dialog, '{v0} · pixel view', v0=path.name)
+        localize_title(dialog, '{v0} · SVG preview' if is_svg else '{v0} · pixel view', v0=path.name)
         dialog.geometry('960x720')
         controls = ttk.Frame(dialog, padding=8)
         controls.pack(fill='x')
@@ -609,20 +621,26 @@ class Editor:
         horizontal.grid(row=1, column=0, sticky='ew')
         viewport.rowconfigure(0, weight=1)
         viewport.columnconfigure(0, weight=1)
-        with Image.open(path) as image:
-            original = image.convert('RGBA')
+        if is_svg:
+            from svg_tools import preview_svg
+            raw = path.read_bytes()
+            original = preview_svg(raw)
+        else:
+            with Image.open(path) as image:
+                original = image.convert('RGBA')
         def zoom(scale):
             if scale is None:
                 scale = min(max(1, canvas.winfo_width())/original.width, max(1, canvas.winfo_height())/original.height)
             size = (max(1, int(original.width*scale)), max(1, int(original.height*scale)))
-            photo = ImageTk.PhotoImage(original.resize(size, Image.Resampling.NEAREST))
+            displayed = preview_svg(raw, min(4096, max(size))) if is_svg else original.resize(size, Image.Resampling.NEAREST)
+            photo = ImageTk.PhotoImage(displayed)
             canvas.photo = photo
             canvas.delete('all')
             canvas.create_image(0, 0, image=photo, anchor='nw')
-            canvas.configure(scrollregion=(0, 0, *size))
+            canvas.configure(scrollregion=(0, 0, *displayed.size))
         for label, scale in [('Fit', None), ('100%', 1), ('200%', 2), ('400%', 4)]:
             localize(ttk.Button(controls, command=lambda s=scale: zoom(s)), label).pack(side='left', padx=4)
-        localize(ttk.Label(controls), 'Nearest-neighbor zoom to inspect pixels', values={}).pack(side='left', padx=16)
+        localize(ttk.Label(controls), 'Vector preview; the original SVG is preserved.' if is_svg else 'Nearest-neighbor zoom to inspect pixels', values={}).pack(side='left', padx=16)
         dialog.after(100, lambda: zoom(1))
 
     def open_pdf(self, path):

@@ -18,6 +18,8 @@ Search games, replace images, add variants, console artwork and PDF manuals. The
 
 Backups and history are stored in `_editor` inside the selected library; if the library is named `generated`, they are stored in `manual` alongside it. Keep these backups to undo changes.
 
+Console logos support original SVG files as well as WebP. SVGs are previewed locally without changing the original; replacing a logo between SVG and WebP preserves undo history and attribution. Other image types use the WebP comparison described above.
+
 This folder contains only the editor. Download the artwork separately; DAT files, the batch converter and the original project are not required.
 
 To test the interface using temporary files: `Run-Editor.cmd --self-test`.
@@ -59,6 +61,8 @@ Para ejecutar desde el código fuente:
 Permite buscar juegos, reemplazar imágenes, agregar variantes, imágenes de consola y manuales PDF. Compara WebP sin pérdida y calidad 90 y conserva el menor. Guarda los cambios en la biblioteca seleccionada y actualiza sus catálogos.
 
 Los respaldos e historial quedan en `_editor` dentro de la biblioteca elegida; si se llama `generated`, quedan en `manual` junto a ella. Conservalos para poder deshacer cambios.
+
+Los logos de consola admiten SVG originales además de WebP. Las vistas previas SVG se generan localmente y conservan el archivo original; los reemplazos entre SVG y WebP mantienen el historial y la atribución al deshacerlos. Los demás tipos de imagen usan la comparación WebP indicada arriba.
 
 Esta carpeta contiene únicamente el editor. Las imágenes se descargan aparte; no necesita los DAT, el conversor ni el proyecto original.
 
