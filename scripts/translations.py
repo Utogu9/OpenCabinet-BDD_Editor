@@ -67,6 +67,7 @@ SPANISH = {
     "Front cover": "Carátula frontal",
     "Back cover": "Carátula trasera",
     "Full cover": "Carátula completa",
+    "Inlay (inside cover)": "Inlay (interior de carátula)",
     "Front poster": "Póster frontal",
     "Back poster": "Póster trasero",
     "Title screen": "Pantalla de título",

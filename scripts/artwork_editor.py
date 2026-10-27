@@ -17,6 +17,7 @@ from console_artwork import ConsoleArtwork, CONSOLE_KINDS
 from editor_common import ROOT, settings_path, write_json
 
 KINDS = {'cover_front': 'Front cover', 'cover_back': 'Back cover', 'cover_full': 'Full cover',
+         'inlay': 'Inlay (inside cover)',
          'poster_front': 'Front poster', 'poster_back': 'Back poster',
          'spine': 'Spine', 'disc': 'Disc', 'cartridge': 'Cartridge', 'logo': 'Logo',
          'screenshot': 'Screenshot', 'title_screen': 'Title screen',
