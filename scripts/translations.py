@@ -1,5 +1,17 @@
 """Spanish translations for English source messages."""
 SPANISH = {
+    "Delete": "Eliminar",
+    "Make primary": "Elegir como principal",
+    "Compare": "Comparar",
+    "Delete artwork": "Eliminar archivo",
+    "Delete {v0}? A backup is kept so you can undo this change.": "¿Eliminar {v0}? Se conserva un respaldo para deshacer este cambio.",
+    "Artwork deleted. Use Undo change to restore it.": "Archivo eliminado. Usá Deshacer cambio para recuperarlo.",
+    "Primary artwork updated; files and credits were kept.": "Imagen principal actualizada; se conservaron los archivos y sus créditos.",
+    "Artwork changed outside the editor; refresh before editing.": "El archivo cambió fuera del editor; actualizá antes de editarlo.",
+    "Choose a numbered variant to make primary.": "Elegí una variante numerada para convertirla en principal.",
+    "Compare images": "Comparar imágenes",
+    "Shared zoom and pan. Drag to move; scroll to zoom.": "Zoom y desplazamiento sincronizados. Arrastrá para mover; usá la rueda para acercar.",
+    "Unavailable": "No disponible",
     "This variant already exists; refresh before importing again.": "Esta variante ya existe; actualizá antes de volver a importar.",
     "SVG is too large or contains unsupported entities.": "El SVG es demasiado grande o contiene entidades no admitidas.",
     "Expected an SVG image.": "Se esperaba una imagen SVG.",

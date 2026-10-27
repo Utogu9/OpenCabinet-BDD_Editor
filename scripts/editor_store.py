@@ -215,6 +215,36 @@ class ArtworkStore:
             for label, asset in manifest['images'].items():
                 if not re.fullmatch(r'[a-z][a-z0-9_]{0,47}', label):
                     raise ValueError(tr('Invalid manual image name'))
+                if asset.get('deleted') or 'catalog_asset' in asset:
+                    base_asset = game['images'].get(label) or asset.get('base_file')
+                    if base_asset:
+                        relative = base_asset['path']
+                        previous_path = inside(output/relative, output)
+                        previous = previous_path.read_bytes() if previous_path.exists() else None
+                        if previous is None or digest(previous) != base_asset['sha256']:
+                            raise ValueError(tr('The generated image changed: {v0}', v0=relative))
+                        files[relative] = {'base': self.blob(previous), 'manual_sha256': None}
+                        payloads[relative] = None
+                    if asset.get('deleted'):
+                        game['images'].pop(label, None)
+                        continue
+                    published = deepcopy(asset['catalog_asset'])
+                    extension = Path(published['path']).suffix.lower()
+                    if extension not in {'.webp', '.pdf', '.png', '.jpg', '.jpeg'}:
+                        raise ValueError(tr('Unsupported manual extension'))
+                    relative = f'{component(serial)}/{label}{extension}'
+                    destination = inside(output/relative, output)
+                    if destination.exists() and (base_asset is None or base_asset['path'] != relative):
+                        raise ValueError(tr('Uncatalogued file: {v0}', v0=relative))
+                    data = self.read_blob(asset['blob'])
+                    if digest(data) != published['sha256']:
+                        raise ValueError(tr('Corrupted manual image'))
+                    base_blob = files.get(relative, {}).get('base')
+                    files[relative] = {'base': base_blob, 'manual_sha256': published['sha256']}
+                    payloads[relative] = data
+                    published['path'] = relative
+                    game['images'][label] = published
+                    continue
                 extension = asset.get('extension', 'webp')
                 if extension not in {'webp', 'pdf'}:
                     raise ValueError(tr('Unsupported manual extension'))
@@ -223,7 +253,7 @@ class ArtworkStore:
                 data = self.read_blob(asset['blob'])
                 if digest(data) != asset['sha256']:
                     raise ValueError(tr('Corrupted manual image'))
-                base_asset = game['images'].get(label)
+                base_asset = game['images'].get(label) or asset.get('base_file')
                 if destination.exists() and (base_asset is None or base_asset['path'] != relative):
                     raise ValueError(tr('Uncatalogued file: {v0}', v0=relative))
                 base_destination = inside(output/base_asset['path'], output) if base_asset else destination
@@ -294,6 +324,8 @@ class ArtworkStore:
             asset.update({k: encoded[k] for k in ('format', 'extension', 'pages') if k in encoded})
             asset.update({'kind': kind, 'blob': self.blob(encoded['data']),
                           'original_blob': self.blob(encoded['original']), 'updated_at': stamp()})
+            if old and old.get('base_file'):
+                asset['base_file'] = deepcopy(old['base_file'])
             manifest['images'][label] = asset
             write_json(path, manifest)
             try:
@@ -337,10 +369,12 @@ class ArtworkStore:
             label = event['label']
             manifest.setdefault('undone_changes', []).append({'label': label,
                 'image': manifest['images'].get(label), 'at': stamp()})
-            if event['previous'] is None:
-                manifest['images'].pop(label, None)
-            else:
-                manifest['images'][label] = event['previous']
+            previous_images = event.get('previous_images', {label: event.get('previous')})
+            for changed_label, previous in previous_images.items():
+                if previous is None:
+                    manifest['images'].pop(changed_label, None)
+                else:
+                    manifest['images'][changed_label] = previous
             write_json(path, manifest)
             try:
                 self.apply_to_output(output)
@@ -374,6 +408,18 @@ class ArtworkStore:
                 raise ValueError(tr('The manual image changed outside the editor'))
             serial, filename = relative.split('/')
             asset = actual['games'][serial]['images'][Path(filename).stem]
+            manifest = json.loads(self.manifest_path(actual['system'], serial).read_text(encoding='utf-8'))
+            edit = manifest['images'][Path(filename).stem]
+            if 'catalog_asset' in edit:
+                expected = {**edit['catalog_asset'], 'path': relative}
+                if asset != expected or path.read_bytes() != self.read_blob(edit['blob']):
+                    raise ValueError(tr('Invalid manual provenance'))
+                if record['base']:
+                    self.read_blob(record['base'])
+                    redirects[relative] = inside(self.root/record['base'], self.manual/'blobs')
+                else:
+                    extras.add(relative)
+                continue
             manual = asset['manual']
             data, original = self.read_blob(manual['blob']), self.read_blob(manual['original_blob'])
             if digest(original) != manual['source_sha256'] or digest(data) != asset['sha256'] or path.read_bytes() != data:

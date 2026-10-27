@@ -308,6 +308,7 @@ class Editor:
             child.destroy()
         self.photos.clear()
         self.action_buttons.clear()
+        self.current_images = {}
 
     def select_game(self):
         selection = self.tree.selection()
@@ -329,7 +330,8 @@ class Editor:
         if directory.exists():
             for path in directory.iterdir():
                 if path.suffix.lower() in {'.webp', '.png', '.jpg', '.jpeg', '.pdf'} and path.stem not in images:
-                    images[path.stem] = {'path': f'{self.serial}/{path.name}', 'kind': path.stem, 'bytes': path.stat().st_size}
+                    from artwork_actions import image_kind
+                    images[path.stem] = {'path': f'{self.serial}/{path.name}', 'kind': image_kind(path.stem, {}), 'bytes': path.stat().st_size}
                     if path.suffix.lower() == '.pdf':
                         images[path.stem]['format'] = 'PDF'
         labels = sorted(images, key=lambda label: (list(KINDS).index(images[label]['kind']) if images[label]['kind'] in KINDS else 99, label))
@@ -361,6 +363,7 @@ class Editor:
         self.task(lambda: self.console_store.images(output), done)
 
     def render_cards(self, labels, images):
+        self.current_images = images
         generation, serial, output = self.generation, self.serial, self.current_output
         for index, label in enumerate(labels):
             asset = images.get(label)
@@ -420,7 +423,48 @@ class Editor:
                 reset = localize(ttk.Button(actions, command=lambda l=label: self.reset(l)), 'Undo' if self.console_mode else 'Restore', values={})
                 reset.pack(side='left')
                 self.action_buttons.append(reset)
+            if asset:
+                more = ttk.Frame(card)
+                more.pack(fill='x', pady=(6, 0))
+                delete = localize(ttk.Button(more, command=lambda l=label: self.artwork_action(l, 'delete')), 'Delete')
+                delete.pack(side='left')
+                self.action_buttons.append(delete)
+                if label != kind:
+                    primary = localize(ttk.Button(more, command=lambda l=label: self.artwork_action(l, 'primary')), 'Make primary')
+                    primary.pack(side='left', padx=5)
+                    self.action_buttons.append(primary)
+                comparable = [key for key, value in images.items() if value.get('format') != 'PDF' and Path(value['path']).suffix.lower() != '.pdf']
+                if label in comparable and len(comparable) > 1:
+                    compare = localize(ttk.Button(more, command=lambda l=label: self.compare_images(l)), 'Compare')
+                    compare.pack(side='left', padx=5)
+                    self.action_buttons.append(compare)
         self.update_buttons()
+
+    def artwork_action(self, label, operation):
+        if not self.can_edit() or label not in self.current_images:
+            return
+        asset = self.current_images[label]
+        if operation == 'delete' and not messagebox.askyesno(tr('Delete artwork'),
+                tr('Delete {v0}? A backup is kept so you can undo this change.', v0=Path(asset['path']).name), parent=self.window):
+            return
+        output, serial, console = self.current_output, self.serial, self.console_mode
+        self.busy = True
+        self.update_buttons()
+        def work():
+            from artwork_actions import change_console, change_game
+            if console:
+                change_console(self.console_store, output, label, operation, asset.get('sha256'))
+            else:
+                change_game(self.store, output, serial, label, operation, asset.get('sha256'))
+        def done(_):
+            self.busy = False
+            localize(self.note, 'Artwork deleted. Use Undo change to restore it.' if operation == 'delete' else 'Primary artwork updated; files and credits were kept.', values={})
+            self.reload_game(output, serial, console)
+        self.task(work, done, self.edit_failed)
+
+    def compare_images(self, label):
+        from image_comparison import ComparisonWindow
+        return ComparisonWindow(self, self.current_images, label)
 
     def next_label(self, kind):
         if self.console_mode:
@@ -512,7 +556,7 @@ class Editor:
         self.update_buttons()
         def done(_):
             self.busy = False
-            self.note.configure(text='Cambio de consola deshecho.' if console else tr('Original artwork restored; the manual change remains in history.'))
+            localize(self.note, 'Last console change undone.' if console else 'Original artwork restored; the manual change remains in history.', values={})
             self.reload_game(output, serial, console)
         self.task(lambda: self.console_store.undo(output, label) if console else self.store.reset(output, serial, label), done, self.edit_failed)
 

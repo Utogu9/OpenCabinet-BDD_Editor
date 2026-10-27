@@ -175,11 +175,15 @@ class ConsoleArtwork:
                 raise ValueError(tr('There are no console changes to undo'))
             history = json.loads(history_path.read_text(encoding='utf-8'))
             index = next((i for i in range(len(history['events'])-1, -1, -1)
-                          if kind is None or history['events'][i].get('label', history['events'][i]['kind']) == kind), None)
+                          if kind is None or kind in history['events'][i].get('labels', [history['events'][i].get('label', history['events'][i]['kind'])])), None)
             if index is None:
                 raise ValueError(tr('There are no more console changes to undo'))
             event = history['events'].pop(index)
             values = json.loads(metadata.read_text(encoding='utf-8'))
+            if event.get('operation'):
+                from artwork_actions import undo_console_action
+                undo_console_action(self, output, values, history, event, metadata, history_path, pending)
+                return
             label = event.get('label', event['kind'])
             if label_kind(label) != event['kind']:
                 raise ValueError(tr('Invalid console artwork path.'))

@@ -101,6 +101,32 @@ def run():
                     assert (folder/'cover_front2.webp').exists()
                     assert (folder/'cover_front.webp').read_bytes() == encoded['data']
                     assert editor.catalog['games']['TEST-1']['images']['cover_front2']['kind'] == 'cover_front'
+                    comparison = editor.compare_images('cover_front')
+                    assert comparison.choices[0].get() == 'cover_front'
+                    assert comparison.choices[1].get() == 'cover_front2'
+                    comparison.zoom(4)
+                    comparison.draw()
+                    assert comparison.scale == 4 and all(comparison.photos)
+                    assert 'KiB' in comparison.details[0].cget('text')
+                    comparison.close()
+                    editor.artwork_action('cover_front2', 'primary')
+                    stage = 311
+                elif stage == 311 and not editor.busy:
+                    assert (folder/'cover_front2.webp').read_bytes() == encoded['data']
+                    assert (folder/'cover_front.webp').read_bytes() == encode_import(imported)['data']
+                    editor.artwork_action('cover_front2', 'delete')
+                    stage = 312
+                elif stage == 312 and not editor.busy:
+                    assert not (folder/'cover_front2.webp').exists()
+                    assert 'cover_front2' not in editor.catalog['games']['TEST-1']['images']
+                    editor.undo()
+                    stage = 313
+                elif stage == 313 and not editor.busy:
+                    assert (folder/'cover_front2.webp').read_bytes() == encoded['data']
+                    editor.undo()
+                    stage = 314
+                elif stage == 314 and not editor.busy:
+                    assert (folder/'cover_front.webp').read_bytes() == encoded['data']
                     editor.undo()
                     stage = 32
                 elif stage == 32 and not editor.busy:
@@ -175,9 +201,30 @@ def run():
                     with patch('artwork_editor.filedialog.askopenfilename', return_value=str(replacement)):
                         editor.import_image('logo', 'logo2')
                     stage = 126
-                elif stage == 126 and not editor.busy:
+                elif stage == 126 and not editor.busy and editor.current_images.get('logo2', {}).get('path') == 'logo2.svg':
                     assert (output/'logo2.svg').exists()
                     assert not (output/'logo2.webp').exists()
+                    assert (output/'logo.svg').read_bytes() == vector.read_bytes()
+                    comparison = editor.compare_images('logo')
+                    comparison.zoom(2)
+                    assert all(record['format'] == 'SVG' for record in comparison.records)
+                    comparison.close()
+                    editor.artwork_action('logo2', 'primary')
+                    stage = 1261
+                elif stage == 1261 and not editor.busy and 'logo' in editor.current_images:
+                    assert b'blue' in (output/'logo.svg').read_bytes()
+                    assert (output/'logo2.svg').read_bytes() == vector.read_bytes()
+                    editor.artwork_action('logo', 'delete')
+                    stage = 1262
+                elif stage == 1262 and not editor.busy:
+                    assert not (output/'logo.svg').exists()
+                    editor.undo()
+                    stage = 1263
+                elif stage == 1263 and not editor.busy:
+                    assert b'blue' in (output/'logo.svg').read_bytes()
+                    editor.undo()
+                    stage = 1264
+                elif stage == 1264 and not editor.busy:
                     assert (output/'logo.svg').read_bytes() == vector.read_bytes()
                     editor.reset('logo2')
                     stage = 127
@@ -281,7 +328,8 @@ def run():
                           'new_game_image_and_undo':True, 'undo_game_registration':True,
                           'english_default':True, 'live_language_switch':True, 'saved_language_restart':True,
                           'svg_logo_import_preview_replace_undo':True,
-                          'game_and_console_import_variants':True}))
+                          'game_and_console_import_variants':True,
+                          'delete_primary_compare_and_undo':True}))
         return 0
 
 

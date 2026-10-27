@@ -18,6 +18,8 @@ Search games, replace images, add variants, console artwork and PDF manuals. The
 
 **Import image** and **+ Variant** add a new numbered file when that type already exists (for example, `logo2.svg`, `screenshot2.webp` or `manual2.pdf`). **Replace** changes only the selected file. This applies to both game and console artwork; byte-identical duplicates are rejected, and changes can be undone.
 
+**Delete** removes the selected file and its catalogue entry, keeping a backup for **Undo change**. **Make primary** swaps a numbered variant with the main file (or promotes it if the main file is missing), preserving the original bytes, credits and metadata. These actions also support PDF manuals. **Compare** opens two images from the current game or console side by side, with shared zoom and pan, dimensions and file sizes; SVG logos are supported. The `inlay` type is for the inside face of a back cover or full cover.
+
 Backups and history are stored in `_editor` inside the selected library; if the library is named `generated`, they are stored in `manual` alongside it. Keep these backups to undo changes.
 
 Console logos support original SVG files as well as WebP. SVGs are previewed locally without changing the original; replacing a logo between SVG and WebP preserves undo history and attribution. Other image types use the WebP comparison described above.
@@ -63,6 +65,8 @@ Para ejecutar desde el código fuente:
 Permite buscar juegos, reemplazar imágenes, agregar variantes, imágenes de consola y manuales PDF. Compara WebP sin pérdida y calidad 90 y conserva el menor. Guarda los cambios en la biblioteca seleccionada y actualiza sus catálogos.
 
 **Importar imagen** y **+ Variante** agregan un archivo numerado cuando ya existe ese tipo (por ejemplo, `logo2.svg`, `screenshot2.webp` o `manual2.pdf`). **Reemplazar** modifica únicamente el archivo seleccionado. Se aplica a imágenes de juegos y consolas y a los manuales; no se crean duplicados idénticos byte por byte y los cambios se pueden deshacer.
+
+**Eliminar** quita el archivo seleccionado y su entrada del catálogo, conservando un respaldo para **Deshacer cambio**. **Elegir como principal** intercambia una variante numerada con el archivo principal (o la promueve si no existe el principal), conservando sus bytes, créditos y metadatos. Estas acciones también admiten manuales PDF. **Comparar** muestra dos imágenes del juego o consola actual lado a lado, con zoom y desplazamiento sincronizados, dimensiones y peso; admite logos SVG. El tipo `inlay` corresponde a la cara interna de una contraportada o portada completa.
 
 Los respaldos e historial quedan en `_editor` dentro de la biblioteca elegida; si se llama `generated`, quedan en `manual` junto a ella. Conservalos para poder deshacer cambios.
 
