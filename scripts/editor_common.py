@@ -12,6 +12,12 @@ ROOT = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) el
 COMPRESSION_POLICY = 'smallest-lossless-or-lossy90-v2'
 
 
+def fit_dimensions(size, maximum=(3840, 2160)):
+    width, height = size
+    scale = min(1, maximum[0]/width, maximum[1]/height)
+    return max(1, round(width*scale)), max(1, round(height*scale))
+
+
 def settings_path():
     if getattr(sys, 'frozen', False):
         base = Path(os.environ.get('LOCALAPPDATA') or Path.home()/'AppData/Local')

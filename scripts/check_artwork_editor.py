@@ -146,7 +146,35 @@ def run():
                 elif stage == 6 and not editor.busy:
                     assert (folder/'manual.pdf').exists()
                     assert editor.catalog['games']['TEST-1']['images']['manual']['format'] == 'PDF'
-                    editor.open_pdf(folder/'manual.pdf')
+                    editor.open_manual(folder/'manual.pdf')
+                    assert editor.cbz_button.winfo_manager() == 'pack'
+                    assert editor.cbz_button.cget('text') == 'IMG to CBZ'
+                    dialog = editor.images_manual()
+                    dialog.append([original, imported])
+                    dialog.pages.selection_clear(0, 'end')
+                    dialog.pages.selection_set(1)
+                    dialog.move(-1)
+                    assert dialog.paths == [imported, original]
+                    dialog.append([original])
+                    dialog.remove()
+                    assert dialog.paths == [imported, original]
+                    dialog.create()
+                    stage = 61
+                elif stage == 61 and not editor.busy:
+                    from pdf_tools import read_pdf
+                    from cbz_tools import inspect_cbz
+                    assert editor.manual_images_dialog is None
+                    pages = inspect_cbz((folder/'manual2.cbz').read_bytes())
+                    assert [(page['width'], page['height']) for page in pages] == [(32, 24), (24, 24)]
+                    assert [page['path'] for page in pages] == ['0001.webp', '0002.webp']
+                    assert editor.catalog['games']['TEST-1']['images']['manual2']['image_pages'][0]['filename'] == imported.name
+                    assert editor.catalog['games']['TEST-1']['images']['manual2']['format'] == 'CBZ'
+                    assert len(read_pdf((folder/'manual.pdf').read_bytes()).pages) == 1
+                    editor.open_manual(folder/'manual2.cbz')
+                    editor.undo()
+                    stage = 62
+                elif stage == 62 and not editor.busy:
+                    assert not (folder/'manual2.cbz').exists()
                     editor.undo()
                     stage = 7
                 elif stage == 7 and not editor.busy:
@@ -169,6 +197,7 @@ def run():
                     editor.show_console()
                     stage = 10
                 elif stage == 10 and editor.console_mode and editor.action_buttons:
+                    assert not editor.cbz_button.winfo_manager()
                     editor.kind.set('render')
                     editor.import_kind()
                     stage = 11
@@ -297,7 +326,7 @@ def run():
                 return
             window.after(70, tick)
         with patch('artwork_editor.filedialog.askopenfilename', side_effect=lambda **k:
-                   str(manual_pdf) if k['filetypes'][0][1] == '*.pdf' else str(imported)), \
+                   str(manual_pdf) if '*.pdf' in k['filetypes'][0][1] else str(imported)), \
              patch('artwork_editor.os.startfile', create=True) as open_pdf, \
              patch('artwork_editor.messagebox.showerror', side_effect=lambda *a, **k: failures.append(str(a))), \
              patch('artwork_editor.messagebox.showinfo'), \
@@ -306,7 +335,7 @@ def run():
             window.mainloop()
             if failures:
                 raise AssertionError('\n'.join(failures))
-            assert open_pdf.call_count == 1
+            assert open_pdf.call_count == 2
         if failures:
             raise AssertionError('\n'.join(failures))
         restarted_window = tk.Tk()
@@ -329,7 +358,8 @@ def run():
                           'english_default':True, 'live_language_switch':True, 'saved_language_restart':True,
                           'svg_logo_import_preview_replace_undo':True,
                           'game_and_console_import_variants':True,
-                          'delete_primary_compare_and_undo':True}))
+                          'delete_primary_compare_and_undo':True,
+                          'ordered_images_to_cbz_manual_and_undo':True}))
         return 0
 
 

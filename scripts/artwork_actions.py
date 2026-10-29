@@ -20,9 +20,9 @@ def game_images(store, output, serial):
     directory = inside(output/serial, output)
     if directory.exists():
         for path in directory.iterdir():
-            if path.is_file() and path.suffix.lower() in {'.webp', '.png', '.jpg', '.jpeg', '.pdf'} and path.stem not in images:
+            if path.is_file() and path.suffix.lower() in {'.webp', '.png', '.jpg', '.jpeg', '.pdf', '.cbz'} and path.stem not in images:
                 images[path.stem] = {'path': f'{serial}/{path.name}', 'kind': image_kind(path.stem, {}),
-                                     'bytes': path.stat().st_size, 'format': 'PDF' if path.suffix.lower() == '.pdf' else path.suffix[1:].upper()}
+                                     'bytes': path.stat().st_size, 'format': path.suffix[1:].upper()}
     return images
 
 

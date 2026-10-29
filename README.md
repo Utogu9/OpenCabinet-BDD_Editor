@@ -1,8 +1,6 @@
 # OpenCabinet-BDD_Editor
 
-[English](#english) · [Español](#español)
-
-## English
+[English](README.md) · [Español](README.es.md)
 
 Artwork, manual and metadata editor for [OpenCabinet-BDD](https://github.com/Utogu9/OpenCabinet-BDD).
 
@@ -14,21 +12,25 @@ To run from source:
 2. Run **Run-Editor.cmd**. On first launch, it installs dependencies in its own environment; Internet access is only required for that installation.
 3. Select the folder containing the consoles and their `catalog.json` files. It can have any name and be stored anywhere.
 
-Search games, replace images, add variants, console artwork and PDF manuals. The editor compares lossless WebP with quality 90 WebP and keeps the smaller file. Changes are saved to the selected library and its catalogues are updated.
+Search games, replace images, add variants, console artwork and CBZ manuals. For artwork, the editor compares lossless WebP with quality 90 WebP and keeps the smaller file; manual pages use quality 90 directly. Changes are saved to the selected library and its catalogues are updated.
 
-**Import image** and **+ Variant** add a new numbered file when that type already exists (for example, `logo2.svg`, `screenshot2.webp` or `manual2.pdf`). **Replace** changes only the selected file. This applies to both game and console artwork; byte-identical duplicates are rejected, and changes can be undone.
+**Import image** and **+ Variant** add a new numbered file when that type already exists (for example, `logo2.svg`, `screenshot2.webp` or `manual2.cbz`). **Replace** changes only the selected file. This applies to both game and console artwork; byte-identical duplicates are rejected, and changes can be undone.
 
-**Delete** removes the selected file and its catalogue entry, keeping a backup for **Undo change**. **Make primary** swaps a numbered variant with the main file (or promotes it if the main file is missing), preserving the original bytes, credits and metadata. These actions also support PDF manuals. **Compare** opens two images from the current game or console side by side, with shared zoom and pan, dimensions and file sizes; SVG logos are supported. The `inlay` type is for the inside face of a back cover or full cover.
+**Delete** removes the selected file and its catalogue entry, keeping a backup for **Undo change**. **Make primary** swaps a numbered variant with the main file (or promotes it if the main file is missing), preserving the original bytes, credits and metadata. These actions also support CBZ manuals. **Compare** opens two images from the current game or console side by side, with shared zoom and pan, dimensions and file sizes; SVG logos are supported. The `inlay` type is for the inside face of a back cover or full cover.
 
 Backups and history are stored in `_editor` inside the selected library; if the library is named `generated`, they are stored in `manual` alongside it. Keep these backups to undo changes.
 
 Console logos support original SVG files as well as WebP. SVGs are previewed locally without changing the original; replacing a logo between SVG and WebP preserves undo history and attribution. Other image types use the WebP comparison described above.
 
+Select `manual` and click **IMG to CBZ** to create a manual from PNG, JPG or WebP images. Add pages, review their previews and arrange the numbered list with **Move up/down**. Images exceeding **3840 pixels wide or 2160 pixels high** are reduced proportionally with Lanczos resampling; smaller images are not enlarged. Manual pages are encoded directly as WebP at quality 90, without generating a lossless candidate, with transparency and colour profiles preserved. The CBZ contains `0001.webp`, `0002.webp`, etc., in the selected order, without margins or cropping. Progress is shown while encoding pages.
+
+New manuals use `manual.cbz`, `manual2.cbz`, etc., preserving existing manuals and supporting catalogue updates and undo. Ordered page paths, source filenames, hashes, source/result dimensions and per-page encoding decisions are recorded in `image_pages`; source images are unchanged. **Import image** also accepts existing CBZ manuals. Imported CBZ archives are checked and preserved without recompression; generated CBZ files use the WebP and size rules above. Manuals open in the associated external reader, which must support CBZ archives containing WebP pages.
+
 This folder contains only the editor. Download the artwork separately; DAT files, the batch converter and the original project are not required.
 
 To test the interface using temporary files: `Run-Editor.cmd --self-test`.
 
-### Editing metadata
+## Editing metadata
 
 Select a game and click **Edit metadata**. The form displays its shared metadata, including Wikidata values when available. Enable **Custom value** beside a field to enter your own value; disable it to use the shared value again. Changes affect only the selected serial. Fields can also be filled for games with no Wikidata record. Names, brief descriptions and full descriptions support English and Spanish.
 
@@ -40,7 +42,7 @@ For a console, select **Console artwork** and then **Edit metadata**. Its fields
 
 **Undo metadata change** reverses the latest metadata edit for the current game or console. Metadata and artwork have separate undo histories and keep each other's changes. Backups and pending-write recovery use the editor's private history folder. The editor does not download metadata automatically or change the original shared Wikidata records.
 
-### Adding a missing game
+## Adding a missing game
 
 Click **Add game from DAT**, choose the console and provider, then **Download / update DAT** or **Import DAT/ZIP**. Search by name or serial, select the exact region/revision/disc entry and confirm the identifiers to create. Existing game folders are reused; their images are preserved. New consoles can also be added to the selected library.
 
@@ -49,51 +51,3 @@ Only No-Intro and Redump identifiers are accepted, using the same serial normali
 DAT files are cached locally with their hashes and source information. If No-Intro requires an interactive download, open its website and import the official Standard DAT/ZIP. If that export lacks serials, import the original **DB Export** XML/ZIP afterwards: only missing serials are filled from primary media/digital fields, matching complete game names. PCB numbers, ROM hashes and database entry numbers are never used as game folder identifiers. The selected entry and DAT provenance are recorded in `catalog.json`; its existing primary DAT metadata is preserved.
 
 **Undo last game registration** reverses the last registration for the selected console. New game folders must be empty: undo their imported images first. Registration preserves existing image history and has a recovery journal for interrupted writes. The private `dat-cache` folder is not part of an artwork contribution.
-
-## Español
-
-Editor de imágenes, manuales y metadatos de [OpenCabinet-BDD](https://github.com/Utogu9/OpenCabinet-BDD).
-
-**Windows:** descargá `OpenCabinet-BDD_Editor.exe` desde [Releases](https://github.com/Utogu9/OpenCabinet-BDD_Editor/releases/latest), ejecutalo y seleccioná tu biblioteca. Incluye Python; no requiere instalación. La configuración se guarda en `%LOCALAPPDATA%\OpenCabinet-BDD_Editor`.
-
-Para ejecutar desde el código fuente:
-
-1. Instalá **Python 3.10 o posterior**, con Tkinter, y habilitá el lanzador `py` o agregá Python al PATH.
-2. Ejecutá **Run-Editor.cmd**. La primera vez instala sus dependencias en un entorno propio; necesita Internet solo para esa instalación.
-3. Elegí la carpeta que contiene las consolas y sus `catalog.json`. Puede estar en cualquier ubicación y tener cualquier nombre.
-
-Permite buscar juegos, reemplazar imágenes, agregar variantes, imágenes de consola y manuales PDF. Compara WebP sin pérdida y calidad 90 y conserva el menor. Guarda los cambios en la biblioteca seleccionada y actualiza sus catálogos.
-
-**Importar imagen** y **+ Variante** agregan un archivo numerado cuando ya existe ese tipo (por ejemplo, `logo2.svg`, `screenshot2.webp` o `manual2.pdf`). **Reemplazar** modifica únicamente el archivo seleccionado. Se aplica a imágenes de juegos y consolas y a los manuales; no se crean duplicados idénticos byte por byte y los cambios se pueden deshacer.
-
-**Eliminar** quita el archivo seleccionado y su entrada del catálogo, conservando un respaldo para **Deshacer cambio**. **Elegir como principal** intercambia una variante numerada con el archivo principal (o la promueve si no existe el principal), conservando sus bytes, créditos y metadatos. Estas acciones también admiten manuales PDF. **Comparar** muestra dos imágenes del juego o consola actual lado a lado, con zoom y desplazamiento sincronizados, dimensiones y peso; admite logos SVG. El tipo `inlay` corresponde a la cara interna de una contraportada o portada completa.
-
-Los respaldos e historial quedan en `_editor` dentro de la biblioteca elegida; si se llama `generated`, quedan en `manual` junto a ella. Conservalos para poder deshacer cambios.
-
-Los logos de consola admiten SVG originales además de WebP. Las vistas previas SVG se generan localmente y conservan el archivo original; los reemplazos entre SVG y WebP mantienen el historial y la atribución al deshacerlos. Los demás tipos de imagen usan la comparación WebP indicada arriba.
-
-Esta carpeta contiene únicamente el editor. Las imágenes se descargan aparte; no necesita los DAT, el conversor ni el proyecto original.
-
-Para comprobar la interfaz con archivos temporales: `Run-Editor.cmd --self-test`.
-
-### Editar metadatos
-
-Seleccioná un juego y pulsá **Editar metadatos**. El formulario muestra sus datos compartidos, incluidos los de Wikidata cuando existen. Activá **Valor propio** junto a un campo para escribir tu dato; desactivalo para volver al valor compartido. Los cambios afectan únicamente al serial elegido. También se pueden completar juegos sin ficha de Wikidata. Los nombres, descripciones breves y descripciones completas admiten inglés y español.
-
-Los campos del juego incluyen desarrollador, editor, género, jugadores mínimos/máximos, modo de juego, fecha de lanzamiento y plataforma. Ingresá un valor por línea, un entero positivo para los jugadores y `AAAA`, `AAAA-MM` o `AAAA-MM-DD` para las fechas. Un valor propio activado pero vacío oculta deliberadamente el valor compartido.
-
-Para una consola, seleccioná **Imágenes de la consola** y luego **Editar metadatos**. Sus campos son **Fecha de lanzamiento**, **Desarrollador** y **Fabricante**, además de nombres y descripciones. La pestaña **Metadatos personalizados / fuente** admite campos adicionales como objeto JSON y muestra la ficha compartida original del juego como referencia.
-
-**Guardar metadatos** actualiza el `catalog.json` de la consola elegida. Las ediciones por juego se guardan en `games[serial].metadata_overrides`; los datos de la consola, en el objeto raíz `console_metadata`. Ambos usan diccionarios por idioma (`labels`, `short_descriptions`, `descriptions`), un diccionario `fields` con listas de declaraciones y datos `custom` opcionales. Las aplicaciones obtienen los datos del juego superponiendo esas claves de campo/idioma a la ficha indicada por `metadata_id`; los valores vacíos explícitos tienen prioridad. Las declaraciones sin editar conservan sus calificadores y referencias. Las ingresadas a mano tienen `source: "manual"`; la licencia y procedencia de la ficha compartida describen esa ficha original, no el contenido nuevo del usuario. Los nombres de metadatos no renombran entradas del DAT ni carpetas.
-
-**Deshacer cambio de metadatos** revierte la última edición de la selección actual, sea un juego o una consola. Los metadatos y las imágenes tienen historiales separados y conservan los cambios del otro. Los respaldos y la recuperación de escrituras interrumpidas usan la carpeta privada del editor. El editor no descarga metadatos automáticamente ni modifica las fichas compartidas originales de Wikidata.
-
-### Agregar un juego que falta
-
-Pulsá **Agregar juego desde DAT**, elegí la consola y el proveedor, y usá **Descargar / actualizar DAT** o **Importar DAT/ZIP**. Buscá por nombre o serial, seleccioná la entrada exacta de región/revisión/disco y confirmá los identificadores que querés crear. Las carpetas de juegos existentes se reutilizan y conservan sus imágenes. También se pueden agregar consolas nuevas a la biblioteca seleccionada.
-
-Solo se admiten identificadores de No-Intro y Redump, con las mismas normalizaciones de seriales, sustituciones de caracteres de carpeta, comprobaciones de colisiones y exclusiones de marcadores que Run-Library. Los resultados requieren una selección explícita: nunca se asigna automáticamente otra región o revisión. No se crean entradas sin un identificador válido. Wii admite seriales de discos Redump y Title IDs de No-Intro Wii Digital CDN.
-
-Los DAT quedan en una caché local con sus hashes y procedencia. Si No-Intro requiere una descarga interactiva, abrí su sitio e importá el DAT/ZIP Standard oficial. Si faltan seriales, importá después el XML/ZIP original **DB Export**: solo se completan los seriales ausentes usando los campos primarios de medio/digital y la coincidencia del nombre completo. Nunca se usan códigos de PCB, hashes de ROM ni números internos de entrada como identificadores de carpeta. La entrada seleccionada y la procedencia del DAT quedan en `catalog.json`; se conservan los metadatos del DAT principal existente.
-
-**Deshacer última alta de juego** revierte la última incorporación de la consola seleccionada. Las carpetas de juegos nuevos deben estar vacías: primero deshacé sus imágenes importadas. Las altas preservan el historial de imágenes existente y tienen un registro de recuperación ante escrituras interrumpidas. La carpeta privada `dat-cache` no forma parte de una contribución de imágenes.

@@ -48,7 +48,7 @@ class ComparisonWindow:
         self.editor = editor
         self.paths = {label: inside(editor.current_output/asset['path'], editor.current_output)
                       for label, asset in images.items()
-                      if asset.get('format') != 'PDF' and Path(asset['path']).suffix.lower() != '.pdf'}
+                      if asset.get('format') not in {'PDF', 'CBZ'} and Path(asset['path']).suffix.lower() not in {'.pdf', '.cbz'}}
         self.window = tk.Toplevel(editor.window)
         localize_title(self.window, 'Compare images')
         self.window.geometry('1200x780')

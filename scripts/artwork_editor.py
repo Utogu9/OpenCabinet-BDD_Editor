@@ -21,7 +21,7 @@ KINDS = {'cover_front': 'Front cover', 'cover_back': 'Back cover', 'cover_full':
          'poster_front': 'Front poster', 'poster_back': 'Back poster',
          'spine': 'Spine', 'disc': 'Disc', 'cartridge': 'Cartridge', 'logo': 'Logo',
          'screenshot': 'Screenshot', 'title_screen': 'Title screen',
-         'banner': 'Banner', 'fanart': 'Artwork', 'manual': 'PDF manual'}
+         'banner': 'Banner', 'fanart': 'Artwork', 'manual': 'Manual (PDF / CBZ)'}
 BG, PANEL, TEXT, MUTED, ACCENT = '#131820', '#1e2632', '#edf2f7', '#a6b4c5', '#54d6be'
 
 
@@ -49,6 +49,7 @@ class Editor:
         from metadata_store import MetadataStore
         self.metadata_store = MetadataStore(self.store)
         self.metadata_dialog = None
+        self.manual_images_dialog = None
         self.pending_game = None
         self.console_mode = False
         self.samples = include_samples
@@ -153,6 +154,7 @@ class Editor:
         self.kind_box.pack(side='left')
         self.add_button = localize(ttk.Button(extra, style='Accent.TButton', command=self.import_kind), 'Import image', values={})
         self.add_button.pack(side='left', padx=8)
+        self.cbz_button = localize(ttk.Button(extra, command=self.images_manual), 'IMG to CBZ')
         self.undo_button = localize(ttk.Button(extra, command=self.undo), 'Undo change', values={})
         self.undo_button.pack(side='right')
         self.window.bind('<Control-f>', lambda _: self.search_entry.focus_set())
@@ -172,6 +174,7 @@ class Editor:
         self.cards.bind('<Configure>', lambda _: self.canvas.configure(scrollregion=self.canvas.bbox('all')))
         self.canvas.bind('<Configure>', lambda e: self.canvas.itemconfigure(self.cards_window, width=e.width))
         self.canvas.bind_all('<MouseWheel>', self.wheel)
+        self.kind.trace_add('write', lambda *_: self.update_buttons())
 
     def wheel(self, event):
         # Keep list/combobox scrolling independent from the image panel.
@@ -329,11 +332,11 @@ class Editor:
         directory = inside(self.current_output/self.serial, self.current_output)
         if directory.exists():
             for path in directory.iterdir():
-                if path.suffix.lower() in {'.webp', '.png', '.jpg', '.jpeg', '.pdf'} and path.stem not in images:
+                if path.suffix.lower() in {'.webp', '.png', '.jpg', '.jpeg', '.pdf', '.cbz'} and path.stem not in images:
                     from artwork_actions import image_kind
                     images[path.stem] = {'path': f'{self.serial}/{path.name}', 'kind': image_kind(path.stem, {}), 'bytes': path.stat().st_size}
-                    if path.suffix.lower() == '.pdf':
-                        images[path.stem]['format'] = 'PDF'
+                    if path.suffix.lower() in {'.pdf', '.cbz'}:
+                        images[path.stem]['format'] = path.suffix[1:].upper()
         labels = sorted(images, key=lambda label: (list(KINDS).index(images[label]['kind']) if images[label]['kind'] in KINDS else 99, label))
         for kind in ('cover_front', 'cover_back', 'disc', 'screenshot', 'logo', 'title_screen'):
             if not any(asset['kind'] == kind for asset in images.values()):
@@ -368,19 +371,19 @@ class Editor:
         for index, label in enumerate(labels):
             asset = images.get(label)
             kind = asset['kind'] if asset else label
-            is_pdf = kind == 'manual' or bool(asset and asset.get('format') == 'PDF')
+            is_manual = kind == 'manual' or bool(asset and asset.get('format') in {'PDF', 'CBZ'})
             card = tk.Frame(self.cards, bg=PANEL, padx=12, pady=12)
             card.grid(row=index//2, column=index%2, sticky='nsew', padx=(0, 10), pady=(0, 12))
             self.cards.columnconfigure(index%2, weight=1)
             titles = CONSOLE_KINDS if self.console_mode else KINDS
             localize(tk.Label(card, bg=PANEL, fg=TEXT, font=('Segoe UI Semibold', 11)), titles.get(kind, kind)).pack(anchor='w')
-            tk.Label(card, text=Path(asset['path']).name if asset else label+('.pdf' if is_pdf else '.webp'), bg=PANEL, fg=MUTED).pack(anchor='w', pady=(2, 6))
+            tk.Label(card, text=Path(asset['path']).name if asset else label+('.cbz' if is_manual else '.webp'), bg=PANEL, fg=MUTED).pack(anchor='w', pady=(2, 6))
             preview = localize(tk.Label(card, bg='#10151c', fg=MUTED, width=30, height=10), 'No image' if not asset else 'Loading…', values={})
             preview.pack(fill='both', expand=True)
-            if asset and is_pdf:
+            if asset and is_manual:
                 path = inside(output/asset['path'], output)
-                localize(preview, 'PDF · {v0} pages\n{v1:.1f} KiB\n\nClick to open the manual', values={'v0': asset.get('pages', '?'), 'v1': asset['bytes'] / 1024}, cursor='hand2')
-                preview.bind('<Button-1>', lambda _, p=path: self.open_pdf(p))
+                localize(preview, '{v0} · {v1} pages\n{v2:.1f} KiB\n\nClick to open the manual', values={'v0': asset.get('format', path.suffix[1:].upper()), 'v1': asset.get('pages', '?'), 'v2': asset['bytes'] / 1024}, cursor='hand2')
+                preview.bind('<Button-1>', lambda _, p=path: self.open_manual(p))
                 original_size = asset.get('compression', {}).get('candidate_bytes', {}).get('original', asset['bytes'])
                 localize(tk.Label(card, bg=PANEL, fg=MUTED), 'Original: {v0:.1f} KiB · saved: {v1:.1f} KiB', values={'v0': original_size / 1024, 'v1': asset['bytes'] / 1024}).pack(anchor='w', pady=7)
             elif asset:
@@ -433,7 +436,7 @@ class Editor:
                     primary = localize(ttk.Button(more, command=lambda l=label: self.artwork_action(l, 'primary')), 'Make primary')
                     primary.pack(side='left', padx=5)
                     self.action_buttons.append(primary)
-                comparable = [key for key, value in images.items() if value.get('format') != 'PDF' and Path(value['path']).suffix.lower() != '.pdf']
+                comparable = [key for key, value in images.items() if value.get('format') not in {'PDF', 'CBZ'} and Path(value['path']).suffix.lower() not in {'.pdf', '.cbz'}]
                 if label in comparable and len(comparable) > 1:
                     compare = localize(ttk.Button(more, command=lambda l=label: self.compare_images(l)), 'Compare')
                     compare.pack(side='left', padx=5)
@@ -489,27 +492,41 @@ class Editor:
         if self.serial or self.console_mode:
             self.import_image(kind, self.next_label(kind), create_only=True)
 
+    def images_manual(self):
+        if self.manual_images_dialog and self.manual_images_dialog.window.winfo_exists():
+            self.manual_images_dialog.window.lift()
+            return self.manual_images_dialog
+        if not self.can_edit() or self.console_mode:
+            return
+        from manual_images_dialog import ManualImagesDialog
+        self.manual_images_dialog = ManualImagesDialog(self)
+        return self.manual_images_dialog
+
     def import_image(self, kind, label, *, create_only=False):
         if not self.can_edit():
             return
-        is_pdf = kind == 'manual'
+        is_manual = kind == 'manual'
         logo = self.console_mode and kind == 'logo'
-        filename = filedialog.askopenfilename(parent=self.window, title=tr('Import {v0}.{v1}', v0=label, v1='pdf' if is_pdf else 'svg / webp' if logo else 'webp'),
-            filetypes=[(tr('PDF manuals'), '*.pdf')] if is_pdf else [(tr('Images'), '*.png *.jpg *.jpeg *.webp *.svg' if logo else '*.png *.jpg *.jpeg *.webp'), (tr('All files'), '*.*')])
+        filename = filedialog.askopenfilename(parent=self.window, title=tr('Import {v0}.{v1}', v0=label, v1='pdf / cbz' if is_manual else 'svg / webp' if logo else 'webp'),
+            filetypes=[(tr('PDF / CBZ manuals'), '*.pdf *.cbz')] if is_manual else [(tr('Images'), '*.png *.jpg *.jpeg *.webp *.svg' if logo else '*.png *.jpg *.jpeg *.webp'), (tr('All files'), '*.*')])
         if not filename:
             return
         output, serial = self.current_output, self.serial
         console = self.console_mode
         self.busy = True
-        localize(self.note, 'Optimizing PDF images and comparing file sizes…' if is_pdf else 'Comparing lossless WebP and quality 90…', values={})
+        localize(self.note, 'Checking CBZ pages…' if is_manual and Path(filename).suffix.lower() == '.cbz' else 'Optimizing PDF images and comparing file sizes…' if is_manual else 'Comparing lossless WebP and quality 90…', values={})
         self.update_buttons()
         def work():
             if logo and Path(filename).suffix.lower() == '.svg':
                 from svg_tools import encode_svg
                 encoded = encode_svg(filename)
-            elif is_pdf:
-                from pdf_tools import optimize_pdf
-                encoded = optimize_pdf(filename)
+            elif is_manual:
+                if Path(filename).suffix.lower() == '.cbz':
+                    from cbz_tools import import_cbz
+                    encoded = import_cbz(filename)
+                else:
+                    from pdf_tools import optimize_pdf
+                    encoded = optimize_pdf(filename)
             else:
                 encoded = encode_import(filename)
             if console:
@@ -522,7 +539,9 @@ class Editor:
             sizes = encoded['compression']['candidate_bytes']
             if encoded.get('format') == 'SVG':
                 localize(self.note, 'Saved original SVG logo.', values={})
-            elif is_pdf:
+            elif encoded.get('format') == 'CBZ':
+                localize(self.note, 'Saved {v0}.cbz · {v1} pages · {v2:.1f} KiB', values={'v0': label, 'v1': encoded['pages'], 'v2': encoded['bytes']/1024})
+            elif is_manual:
                 localize(self.note, 'Saved {v0}.pdf · {v1} pages · {v2:.1f} → {v3:.1f} KiB', values={'v0': label, 'v1': encoded['pages'], 'v2': sizes['original'] / 1024, 'v3': encoded['bytes'] / 1024})
             else:
                 localize(self.note, 'Saved {v0}.webp · lossless: {v1:.1f} KiB · quality 90: {v2:.1f} KiB', values={'v0': label, 'v1': sizes['lossless'] / 1024, 'v2': sizes['lossy90'] / 1024})
@@ -571,6 +590,11 @@ class Editor:
             button.configure(state=state)
         self.undo_button.configure(state=state)
         self.metadata_button.configure(state=state)
+        self.cbz_button.configure(state=state)
+        if self.kind.get().strip() == 'manual' and not self.console_mode:
+            self.cbz_button.pack(side='left', padx=(0, 8), before=self.undo_button)
+        else:
+            self.cbz_button.pack_forget()
         self.language_button.configure(state='disabled' if self.busy else 'normal')
         available = not self.busy and not self.store.lock_status()
         self.new_game_button.configure(state='normal' if available else 'disabled')
@@ -692,7 +716,7 @@ class Editor:
         localize(ttk.Label(controls), 'Vector preview; the original SVG is preserved.' if is_svg else 'Nearest-neighbor zoom to inspect pixels', values={}).pack(side='left', padx=16)
         dialog.after(100, lambda: zoom(1))
 
-    def open_pdf(self, path):
+    def open_manual(self, path):
         try:
             os.startfile(str(path))
         except OSError as exc:
@@ -705,6 +729,10 @@ class Editor:
         if self.metadata_dialog and self.metadata_dialog.window.winfo_exists():
             self.metadata_dialog.close()
             if self.metadata_dialog is not None:
+                return
+        if self.manual_images_dialog and self.manual_images_dialog.window.winfo_exists():
+            self.manual_images_dialog.close()
+            if self.manual_images_dialog is not None:
                 return
         self.closed = True
         self.pool.shutdown(wait=False, cancel_futures=True)

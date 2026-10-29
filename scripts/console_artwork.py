@@ -117,7 +117,7 @@ class ConsoleArtwork:
         label = kind if label is None else label
         if label_kind(label) != kind:
             raise ValueError(tr('Invalid console artwork path.'))
-        if kind not in CONSOLE_KINDS or encoded.get('format') == 'PDF' or (encoded.get('format') == 'SVG' and kind != 'logo'):
+        if kind not in CONSOLE_KINDS or encoded.get('format') in {'PDF', 'CBZ'} or (encoded.get('format') == 'SVG' and kind != 'logo'):
             raise ValueError(tr('Console artwork supports logo, render and screenshot in WebP'))
         with self.store.writer():
             output, metadata, history_path, pending = self.paths(output)

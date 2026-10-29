@@ -230,7 +230,7 @@ class ArtworkStore:
                         continue
                     published = deepcopy(asset['catalog_asset'])
                     extension = Path(published['path']).suffix.lower()
-                    if extension not in {'.webp', '.pdf', '.png', '.jpg', '.jpeg'}:
+                    if extension not in {'.webp', '.pdf', '.cbz', '.png', '.jpg', '.jpeg'}:
                         raise ValueError(tr('Unsupported manual extension'))
                     relative = f'{component(serial)}/{label}{extension}'
                     destination = inside(output/relative, output)
@@ -246,7 +246,7 @@ class ArtworkStore:
                     game['images'][label] = published
                     continue
                 extension = asset.get('extension', 'webp')
-                if extension not in {'webp', 'pdf'}:
+                if extension not in {'webp', 'pdf', 'cbz'}:
                     raise ValueError(tr('Unsupported manual extension'))
                 relative = f'{component(serial)}/{label}.{extension}'
                 destination = inside(output/relative, output)
@@ -268,7 +268,7 @@ class ArtworkStore:
                                    'manual_sha256': asset['sha256']}
                 payloads[relative] = data
                 game['images'][label] = {k: asset[k] for k in ('kind', 'sha256', 'bytes', 'width', 'height', 'alpha', 'compression')}
-                game['images'][label].update({k: asset[k] for k in ('format', 'extension', 'pages') if k in asset})
+                game['images'][label].update({k: asset[k] for k in ('format', 'extension', 'pages', 'image_pages') if k in asset})
                 game['images'][label].update({'path': relative, 'sources': (base_asset or {}).get('sources', []),
                                              'manual': {k: asset[k] for k in ('blob', 'original_blob', 'filename', 'source_sha256', 'updated_at')}})
         if not files:
@@ -298,8 +298,8 @@ class ArtworkStore:
         output = self.output(output)
         if not re.fullmatch(r'[a-z][a-z0-9_]{0,47}', label) or not re.fullmatch(r'[a-z][a-z0-9_]{0,39}', kind):
             raise ValueError(tr('Use lowercase letters, numbers and underscores for the type'))
-        if (kind == 'manual') != (encoded.get('format') == 'PDF'):
-            raise ValueError(tr('The manual type accepts complete PDFs; other types accept images'))
+        if (kind == 'manual') != (encoded.get('format') in {'PDF', 'CBZ'}):
+            raise ValueError(tr('The manual type accepts PDF or CBZ files; other types accept images.'))
         with self.writer():
             catalog = self.read_catalog(output)
             if catalog.get('status') not in {'complete', 'sample_complete'} or catalog.get('schema_version') != 2:
@@ -321,7 +321,7 @@ class ArtworkStore:
             old = manifest['images'].get(label)
             manifest['history'].append({'label': label, 'previous': old, 'at': stamp()})
             asset = {k: encoded[k] for k in ('sha256', 'bytes', 'width', 'height', 'alpha', 'compression', 'filename', 'source_sha256')}
-            asset.update({k: encoded[k] for k in ('format', 'extension', 'pages') if k in encoded})
+            asset.update({k: encoded[k] for k in ('format', 'extension', 'pages', 'image_pages') if k in encoded})
             asset.update({'kind': kind, 'blob': self.blob(encoded['data']),
                           'original_blob': self.blob(encoded['original']), 'updated_at': stamp()})
             if old and old.get('base_file'):
@@ -424,6 +424,17 @@ class ArtworkStore:
             data, original = self.read_blob(manual['blob']), self.read_blob(manual['original_blob'])
             if digest(original) != manual['source_sha256'] or digest(data) != asset['sha256'] or path.read_bytes() != data:
                 raise ValueError(tr('Invalid manual provenance'))
+            if asset.get('format') == 'CBZ':
+                from cbz_tools import verify_cbz
+                verify_cbz(data, asset)
+                if data != original:
+                    raise ValueError(tr('Invalid manual provenance'))
+                if record['base']:
+                    self.read_blob(record['base'])
+                    redirects[relative] = inside(self.root/record['base'], self.manual/'blobs')
+                else:
+                    extras.add(relative)
+                continue
             if asset.get('format') == 'PDF':
                 from pdf_tools import read_pdf, signature
                 pdf = read_pdf(data)
