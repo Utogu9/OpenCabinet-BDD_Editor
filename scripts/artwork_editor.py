@@ -3,6 +3,7 @@ from i18n import tr, localize, set_text, localize_title, localize_heading
 from i18n import initialize_language, language, set_language, refresh_translations
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+from io import BytesIO
 import json
 import os
 from pathlib import Path
@@ -407,7 +408,9 @@ class Editor:
                         im = preview_svg(path.read_bytes(), 400)
                         im.thumbnail((320, 220), Image.Resampling.LANCZOS)
                         return im
-                    with Image.open(path) as im:
+                    # Decode a snapshot without keeping the artwork file open
+                    # while another worker replaces or deletes it on Windows.
+                    with Image.open(BytesIO(path.read_bytes())) as im:
                         im = im.convert('RGBA')
                         im.thumbnail((320, 220), Image.Resampling.LANCZOS)
                         return im
@@ -758,7 +761,7 @@ class Editor:
             raw = path.read_bytes()
             original = preview_svg(raw)
         else:
-            with Image.open(path) as image:
+            with Image.open(BytesIO(path.read_bytes())) as image:
                 original = image.convert('RGBA')
         def zoom(scale):
             if scale is None:

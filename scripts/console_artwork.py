@@ -1,5 +1,6 @@
 """Console artwork at the library root; independent from game catalogues."""
 from i18n import tr
+from io import BytesIO
 import json
 import re
 from pathlib import Path
@@ -60,7 +61,7 @@ class ConsoleArtwork:
                     from svg_tools import svg_info
                     width, height = svg_info(path.read_bytes())
                 else:
-                    with Image.open(path) as image:
+                    with Image.open(BytesIO(path.read_bytes())) as image:
                         width, height = image.size
                 result[label] = {**record, 'path': path.name, 'kind': kind, 'format': 'SVG' if path.suffix == '.svg' else 'WEBP',
                                 'width': width, 'height': height, 'bytes': path.stat().st_size}

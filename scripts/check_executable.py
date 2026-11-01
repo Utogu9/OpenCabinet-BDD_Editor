@@ -18,8 +18,18 @@ def main():
         report = folder/'self-test.json'
         environment = {k:v for k,v in os.environ.items() if k not in {'PYTHONPATH', 'PYTHONHOME'}}
         environment['LOCALAPPDATA'] = str(folder/'settings')
-        subprocess.run([str(executable), '--self-test', '--self-test-report', str(report)],
-                       cwd=folder, env=environment, check=True, timeout=90)
+        try:
+            subprocess.run([str(executable), '--self-test', '--self-test-report', str(report)],
+                           cwd=folder, env=environment, check=True, timeout=90)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            log = Path(environment['LOCALAPPDATA'])/'OpenCabinet-BDD_Editor/editor-error.log'
+            if log.is_file():
+                details = log.read_text(encoding='utf-8')
+                destination = ROOT/'reports/executable-error.log'
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_text(details, encoding='utf-8')
+                print(details, flush=True)
+            raise
         result = json.loads(report.read_text(encoding='utf-8'))
         if result.get('status') != 'passed' or result.get('frozen') is not True:
             raise RuntimeError('The executable did not pass its bundled UI self-test')
