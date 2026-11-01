@@ -51,6 +51,15 @@ def run():
         window.report_callback_exception = lambda typ, value, tb: failures.append(''.join(traceback.format_exception(typ, value, tb)))
         stage, started = 0, time.monotonic()
         dialog = None
+        deletion_snapshot = {}
+        delete_confirmations = []
+        def ask(title, message, **options):
+            if title == 'Delete game':
+                assert options['default'] == 'no' and options['icon'] == 'warning'
+                assert 'TEST-1' in message and str(folder) in message
+                delete_confirmations.append(message)
+                return len(delete_confirmations) > 1
+            return True
         def tick():
             nonlocal stage, dialog
             try:
@@ -314,8 +323,36 @@ def run():
                     stage = 19
                 elif stage == 19 and not editor.busy and 'SLUS-99999' not in (editor.catalog or {}).get('games',{}):
                     assert not (root/'generated/Sony - PlayStation/SLUS-99999').exists()
+                    editor.library_name.set(next(label for label, row in editor.library_rows.items() if row['output'] == output))
+                    editor.load_library()
+                    stage = 190
+                elif stage == 190 and editor.serial == 'TEST-1':
+                    deletion_snapshot['catalog'] = (output/'catalog.json').read_bytes()
+                    deletion_snapshot['files'] = {p.name: p.read_bytes() for p in folder.iterdir() if p.is_file()}
+                    editor.delete_game()
+                    stage = 20
+                elif stage == 20 and not editor.busy:
+                    assert len(delete_confirmations) == 1
+                    assert (output/'catalog.json').read_bytes() == deletion_snapshot['catalog']
+                    assert folder.is_dir()
+                    editor.delete_game()
+                    stage = 21
+                elif stage == 21 and not editor.busy:
+                    assert len(delete_confirmations) == 2
+                    assert not folder.exists() and 'TEST-1' not in editor.catalog['games']
+                    assert str(editor.delete_game_button.cget('state')) == 'disabled'
+                    assert str(editor.undo_delete_button.cget('state')) == 'normal'
+                    editor.undo_game_deletion()
+                    stage = 22
+                elif stage == 22 and not editor.busy and editor.serial == 'TEST-1':
+                    assert (output/'catalog.json').read_bytes() == deletion_snapshot['catalog']
+                    assert {p.name: p.read_bytes() for p in folder.iterdir() if p.is_file()} == deletion_snapshot['files']
+                    assert str(editor.delete_game_button.cget('state')) == 'normal'
+                    editor.show_console()
+                    assert str(editor.delete_game_button.cget('state')) == 'disabled'
                     editor.toggle_language()
                     assert editor.language_button.cget('text') == 'EN'
+                    assert editor.delete_game_button.cget('text') == 'Eliminar juego'
                     editor.close()
                     return
             except Exception:
@@ -330,7 +367,7 @@ def run():
              patch('artwork_editor.os.startfile', create=True) as open_pdf, \
              patch('artwork_editor.messagebox.showerror', side_effect=lambda *a, **k: failures.append(str(a))), \
              patch('artwork_editor.messagebox.showinfo'), \
-             patch('game_dialog.messagebox.askyesno',return_value=True):
+             patch('game_dialog.messagebox.askyesno',side_effect=ask):
             window.after(100, tick)
             window.mainloop()
             if failures:
@@ -359,6 +396,7 @@ def run():
                           'svg_logo_import_preview_replace_undo':True,
                           'game_and_console_import_variants':True,
                           'delete_primary_compare_and_undo':True,
+                          'delete_game_confirmation_cancel_and_restore':True,
                           'ordered_images_to_cbz_manual_and_undo':True}))
         return 0
 

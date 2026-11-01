@@ -47,6 +47,8 @@ class Editor:
         self.console_store = ConsoleArtwork(self.store)
         from game_registration import GameRegistration
         self.registration = GameRegistration(self.store)
+        from game_deletion import GameDeletion
+        self.game_deletion = GameDeletion(self.store)
         from metadata_store import MetadataStore
         self.metadata_store = MetadataStore(self.store)
         self.metadata_dialog = None
@@ -122,6 +124,8 @@ class Editor:
         self.new_game_button.pack(fill='x', pady=(8, 0))
         self.undo_game_button = localize(ttk.Button(left, command=self.undo_game), 'Undo last game registration', values={})
         self.undo_game_button.pack(fill='x', pady=(6, 0))
+        self.undo_delete_button = localize(ttk.Button(left, command=self.undo_game_deletion), 'Undo last game deletion')
+        self.undo_delete_button.pack(fill='x', pady=(6, 0))
         localize(ttk.Label(left, style='Muted.TLabel'), 'SEARCH GAME OR SERIAL', values={}).pack(anchor='w', pady=(20, 7))
         self.query = tk.StringVar()
         self.search_entry = ttk.Entry(left, textvariable=self.query)
@@ -145,8 +149,12 @@ class Editor:
         self.title.pack(anchor='w', pady=(0, 6))
         self.details = localize(ttk.Label(right, style='Muted.TLabel', wraplength=760), 'Search by name, region or identifier.', values={})
         self.details.pack(anchor='w', pady=(0, 12))
-        self.metadata_button = localize(ttk.Button(right, command=self.edit_metadata), 'Edit metadata', values={})
-        self.metadata_button.pack(anchor='w', pady=(0, 10))
+        game_actions = ttk.Frame(right)
+        game_actions.pack(fill='x', pady=(0, 10))
+        self.metadata_button = localize(ttk.Button(game_actions, command=self.edit_metadata), 'Edit metadata', values={})
+        self.metadata_button.pack(side='left')
+        self.delete_game_button = localize(ttk.Button(game_actions, command=self.delete_game), 'Delete game')
+        self.delete_game_button.pack(side='right')
         extra = ttk.Frame(right)
         extra.pack(fill='x', pady=(0, 12))
         localize(ttk.Label(extra), 'Add type:', values={}).pack(side='left', padx=(0, 8))
@@ -250,6 +258,8 @@ class Editor:
         console_selected = self.console_mode and self.current_output == output
         set_text(self.count, 'Reading names and folders…')
         def load():
+            if self.game_deletion.has_pending(output):
+                self.game_deletion.recover(output)
             if self.registration.has_pending(output):
                 self.registration.recover(output)
             if self.metadata_store.has_pending(output):
@@ -306,6 +316,8 @@ class Editor:
             self.serial = None
             self.clear_cards()
             localize(self.title, 'No matches', values={})
+            self.details.configure(text='')
+        self.update_buttons()
 
     def clear_cards(self):
         for child in self.cards.winfo_children():
@@ -591,6 +603,7 @@ class Editor:
             button.configure(state=state)
         self.undo_button.configure(state=state)
         self.metadata_button.configure(state=state)
+        self.delete_game_button.configure(state=state if not self.console_mode else 'disabled')
         self.cbz_button.configure(state=state)
         if self.kind.get().strip() == 'manual' and not self.console_mode:
             self.cbz_button.pack(side='left', padx=(0, 8), before=self.undo_button)
@@ -600,6 +613,51 @@ class Editor:
         available = not self.busy and not self.store.lock_status()
         self.new_game_button.configure(state='normal' if available else 'disabled')
         self.undo_game_button.configure(state='normal' if available and self.current_output and self.registration.can_undo(self.current_output) else 'disabled')
+        self.undo_delete_button.configure(state='normal' if available and self.current_output and self.game_deletion.can_undo(self.current_output) else 'disabled')
+
+    def delete_game(self):
+        if not self.can_edit() or self.console_mode:
+            return
+        output, serial = self.current_output, self.serial
+        self.busy = True
+        self.update_buttons()
+        def confirm(snapshot):
+            if self.current_output != output or self.serial != serial or self.console_mode:
+                self.busy = False
+                self.update_buttons()
+                return
+            message = tr('Delete this game completely?\n\n{v0}\nID: {v1}\nFolder: {v2}\n\nThis removes the entire game folder ({v3} files, {v4:.1f} MiB), including manuals and unlisted files, and its catalogue entry.\n\nA private backup is kept. Use Undo last game deletion before making further changes to restore it.',
+                         v0=snapshot['title'], v1=serial, v2=snapshot['directory'],
+                         v3=snapshot['file_count'], v4=snapshot['bytes']/1024**2)
+            if not messagebox.askyesno(tr('Delete game'), message, icon='warning', default='no', parent=self.window):
+                self.busy = False
+                self.update_buttons()
+                return
+            self.task(lambda: self.game_deletion.delete(output, serial, snapshot['token']), done, self.edit_failed)
+        def done(_):
+            self.busy = False
+            localize(self.note, 'Game deleted. Use Undo last game deletion to restore it.')
+            self.reload_game(output, None)
+            self.update_buttons()
+        self.task(lambda: self.game_deletion.preview(output, serial), confirm, self.edit_failed)
+
+    def undo_game_deletion(self):
+        if self.busy or not self.current_output or self.store.lock_status():
+            return
+        if not messagebox.askyesno(tr('Undo last game deletion'),
+                tr('Restore the last deleted game, its files and catalogue entry?'), default='no', parent=self.window):
+            return
+        output = self.current_output
+        self.busy = True
+        self.update_buttons()
+        def done(serial):
+            self.busy = False
+            localize(self.note, 'Deleted game restored with its files and catalogue entry.')
+            if self.current_output == output:
+                self.console_mode = False
+            self.reload_game(output, serial)
+            self.update_buttons()
+        self.task(lambda: self.game_deletion.undo(output), done, self.edit_failed)
 
     def edit_metadata(self):
         if self.metadata_dialog and self.metadata_dialog.window.winfo_exists():

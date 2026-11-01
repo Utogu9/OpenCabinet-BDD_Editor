@@ -1,5 +1,16 @@
 """Spanish translations for English source messages."""
 SPANISH = {
+    "Delete game": "Eliminar juego",
+    "Undo last game deletion": "Deshacer última eliminación de juego",
+    "Delete this game completely?\n\n{v0}\nID: {v1}\nFolder: {v2}\n\nThis removes the entire game folder ({v3} files, {v4:.1f} MiB), including manuals and unlisted files, and its catalogue entry.\n\nA private backup is kept. Use Undo last game deletion before making further changes to restore it.": "¿Eliminar este juego por completo?\n\n{v0}\nID: {v1}\nCarpeta: {v2}\n\nSe eliminará toda la carpeta del juego ({v3} archivos, {v4:.1f} MiB), incluidos los manuales y archivos no catalogados, y su entrada en el catálogo.\n\nSe conserva un respaldo privado. Usá Deshacer última eliminación de juego antes de realizar otros cambios para restaurarlo.",
+    "Game deleted. Use Undo last game deletion to restore it.": "Juego eliminado. Usá Deshacer última eliminación de juego para restaurarlo.",
+    "Restore the last deleted game, its files and catalogue entry?": "¿Restaurar el último juego eliminado, sus archivos y su entrada en el catálogo?",
+    "Deleted game restored with its files and catalogue entry.": "Juego eliminado restaurado con sus archivos y su entrada en el catálogo.",
+    "The game path must be a directory.": "La ruta del juego debe ser una carpeta.",
+    "Unsupported file in the game directory.": "Archivo no admitido dentro de la carpeta del juego.",
+    "The game changed after confirmation; review it before deleting.": "El juego cambió después de la confirmación; revisalo antes de eliminarlo.",
+    "There are no game deletions to undo for this console.": "No hay eliminaciones de juegos para deshacer en esta consola.",
+    "The library changed after deletion; undo later changes before restoring the game.": "La biblioteca cambió después de la eliminación; deshacé los cambios posteriores antes de restaurar el juego.",
     "IMG to CBZ": "IMG a CBZ",
     "Images to CBZ manual": "Imágenes a manual CBZ",
     "CBZ page: {v0} x {v1} px": "Página CBZ: {v0} x {v1} píxeles",

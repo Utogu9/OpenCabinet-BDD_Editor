@@ -44,7 +44,9 @@ For a console, select **Console artwork** and then **Edit metadata**. Its fields
 
 **Undo metadata change** reverses the latest metadata edit for the current game or console. Metadata and artwork have separate undo histories and keep each other's changes. Backups and pending-write recovery use the editor's private history folder. The editor does not download metadata automatically or change the original shared Wikidata records.
 
-## Adding a missing game
+## Adding and removing games
+
+To remove a game, select it and click **Delete game**. A confirmation shows its title, identifier, folder, file count and total size. This removes the entire game folder, including manuals and unlisted files, and its entry in `catalog.json`. Other games and shared metadata records are preserved. A private backup also retains this game's previous editing history. **Undo last game deletion** restores it; use it before making further changes, as restoration refuses to overwrite files or catalogue data changed since deletion. Pending deletions are recovered when the console is opened again after an interruption.
 
 Click **Add game from DAT**, choose the console and provider, then **Download / update DAT** or **Import DAT/ZIP**. Search by name or serial, select the exact region/revision/disc entry and confirm the identifiers to create. Existing game folders are reused; their images are preserved. New consoles can also be added to the selected library.
 

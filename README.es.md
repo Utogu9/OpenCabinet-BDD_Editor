@@ -44,7 +44,9 @@ Para una consola, seleccioná **Imágenes de la consola** y luego **Editar metad
 
 **Deshacer cambio de metadatos** revierte la última edición de la selección actual, sea un juego o una consola. Los metadatos y las imágenes tienen historiales separados y conservan los cambios del otro. Los respaldos y la recuperación de escrituras interrumpidas usan la carpeta privada del editor. El editor no descarga metadatos automáticamente ni modifica las fichas compartidas originales de Wikidata.
 
-## Agregar un juego que falta
+## Agregar y eliminar juegos
+
+Para eliminar un juego, seleccionalo y pulsá **Eliminar juego**. La confirmación muestra su título, identificador, carpeta, cantidad de archivos y peso total. Se elimina toda la carpeta, incluidos los manuales y archivos no catalogados, y su entrada en `catalog.json`. Se conservan los demás juegos y las fichas de metadatos compartidas. Un respaldo privado también conserva el historial de edición anterior de ese juego. **Deshacer última eliminación de juego** permite restaurarlo; usalo antes de realizar otros cambios, ya que la restauración no sobrescribe archivos ni datos del catálogo modificados después de eliminarlo. Las eliminaciones interrumpidas se recuperan al volver a abrir la consola.
 
 Pulsá **Agregar juego desde DAT**, elegí la consola y el proveedor, y usá **Descargar / actualizar DAT** o **Importar DAT/ZIP**. Buscá por nombre o serial, seleccioná la entrada exacta de región/revisión/disco y confirmá los identificadores que querés crear. Las carpetas de juegos existentes se reutilizan y conservan sus imágenes. También se pueden agregar consolas nuevas a la biblioteca seleccionada.
 
