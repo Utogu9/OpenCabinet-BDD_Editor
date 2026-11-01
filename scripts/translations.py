@@ -285,6 +285,7 @@ SPANISH = {
     "Spine": "Lomo",
     "Disc": "Disco",
     "Cartridge": "Cartucho",
+    "Cartridge label": "Etiqueta del cartucho",
     "Screenshot": "Captura",
     "PDF manual": "Manual PDF",
     "No image": "Sin imagen",

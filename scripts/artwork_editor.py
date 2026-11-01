@@ -19,7 +19,8 @@ from editor_common import ROOT, settings_path, write_json
 KINDS = {'cover_front': 'Front cover', 'cover_back': 'Back cover', 'cover_full': 'Full cover',
          'inlay': 'Inlay (inside cover)',
          'poster_front': 'Front poster', 'poster_back': 'Back poster',
-         'spine': 'Spine', 'disc': 'Disc', 'cartridge': 'Cartridge', 'logo': 'Logo',
+         'spine': 'Spine', 'disc': 'Disc', 'cartridge': 'Cartridge',
+         'label': 'Cartridge label', 'logo': 'Logo',
          'screenshot': 'Screenshot', 'title_screen': 'Title screen',
          'banner': 'Banner', 'fanart': 'Artwork', 'manual': 'Manual (PDF / CBZ)'}
 BG, PANEL, TEXT, MUTED, ACCENT = '#131820', '#1e2632', '#edf2f7', '#a6b4c5', '#54d6be'

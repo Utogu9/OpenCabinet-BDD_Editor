@@ -20,6 +20,8 @@ Search games, replace images, add variants, console artwork and CBZ manuals. For
 
 Backups and history are stored in `_editor` inside the selected library; if the library is named `generated`, they are stored in `manual` alongside it. Keep these backups to undo changes.
 
+Use `label` for the sticker on a game cartridge. Files are saved as `label.webp`, `label2.webp`, etc., with the same WebP optimization and editing actions as other game artwork.
+
 Console logos support original SVG files as well as WebP. SVGs are previewed locally without changing the original; replacing a logo between SVG and WebP preserves undo history and attribution. Other image types use the WebP comparison described above.
 
 Select `manual` and click **IMG to CBZ** to create a manual from PNG, JPG or WebP images. Add pages, review their previews and arrange the numbered list with **Move up/down**. Images exceeding **3840 pixels wide or 2160 pixels high** are reduced proportionally with Lanczos resampling; smaller images are not enlarged. Manual pages are encoded directly as WebP at quality 90, without generating a lossless candidate, with transparency and colour profiles preserved. The CBZ contains `0001.webp`, `0002.webp`, etc., in the selected order, without margins or cropping. Progress is shown while encoding pages.

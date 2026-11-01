@@ -20,6 +20,8 @@ Permite buscar juegos, reemplazar imágenes, agregar variantes, imágenes de con
 
 Los respaldos e historial quedan en `_editor` dentro de la biblioteca elegida; si se llama `generated`, quedan en `manual` junto a ella. Conservalos para poder deshacer cambios.
 
+Usá `label` para el sticker o etiqueta del cartucho. Los archivos se guardan como `label.webp`, `label2.webp`, etc., con la misma optimización WebP y las mismas acciones de edición que las demás imágenes del juego.
+
 Los logos de consola admiten SVG originales además de WebP. Las vistas previas SVG se generan localmente y conservan el archivo original; los reemplazos entre SVG y WebP mantienen el historial y la atribución al deshacerlos. Los demás tipos de imagen usan la comparación WebP indicada arriba.
 
 Seleccioná `manual` y pulsá **IMG a CBZ** para crear un manual con imágenes PNG, JPG o WebP. Agregá páginas, revisá las vistas previas y ordená la lista numerada con **Subir/Bajar**. Las imágenes que superen **3840 píxeles de ancho o 2160 de alto** se reducen proporcionalmente con remuestreo Lanczos; las más pequeñas no se amplían. Las páginas del manual se convierten directamente a WebP al 90 %, sin generar una alternativa sin pérdida, conservando transparencias y perfiles de color. El CBZ contiene `0001.webp`, `0002.webp`, etc., en el orden elegido, sin márgenes ni recortes. Se muestra el avance durante la conversión.
