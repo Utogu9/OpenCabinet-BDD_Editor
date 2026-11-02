@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import time
 
 from PIL import Image, ImageOps
 from editor_common import ROOT, compare_encodings, digest, is_link, write_json
@@ -44,7 +45,17 @@ def atomic_bytes(path, data):
         f.flush()
         os.fsync(f.fileno())
     try:
-        os.replace(temporary, path)
+        # Previews and Windows scanners may briefly hold a destination open.
+        # Keep the complete temporary file and retry the atomic replacement;
+        # never delete the destination to work around a sharing violation.
+        for attempt in range(10):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError as error:
+                if getattr(error, 'winerror', None) not in {5, 32, 33} or attempt == 9:
+                    raise
+                time.sleep(min(0.025 * 2**attempt, 0.2))
     finally:
         temporary.unlink(missing_ok=True)
 
