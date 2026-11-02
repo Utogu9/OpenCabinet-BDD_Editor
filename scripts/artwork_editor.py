@@ -123,6 +123,8 @@ class Editor:
         localize(ttk.Button(left, command=self.show_console), 'Console artwork', values={}).pack(fill='x', pady=(8, 0))
         self.new_game_button = localize(ttk.Button(left, command=self.add_game), 'Add game from DAT', values={})
         self.new_game_button.pack(fill='x', pady=(8, 0))
+        self.manual_game_button = localize(ttk.Button(left, command=self.add_manual_game), 'Add game manually')
+        self.manual_game_button.pack(fill='x', pady=(6, 0))
         self.undo_game_button = localize(ttk.Button(left, command=self.undo_game), 'Undo last game registration', values={})
         self.undo_game_button.pack(fill='x', pady=(6, 0))
         self.undo_delete_button = localize(ttk.Button(left, command=self.undo_game_deletion), 'Undo last game deletion')
@@ -615,6 +617,7 @@ class Editor:
         self.language_button.configure(state='disabled' if self.busy else 'normal')
         available = not self.busy and not self.store.lock_status()
         self.new_game_button.configure(state='normal' if available else 'disabled')
+        self.manual_game_button.configure(state='normal' if available else 'disabled')
         self.undo_game_button.configure(state='normal' if available and self.current_output and self.registration.can_undo(self.current_output) else 'disabled')
         self.undo_delete_button.configure(state='normal' if available and self.current_output and self.game_deletion.can_undo(self.current_output) else 'disabled')
 
@@ -677,6 +680,12 @@ class Editor:
             return
         from game_dialog import AddGameDialog
         return AddGameDialog(self)
+
+    def add_manual_game(self):
+        if self.busy or self.store.lock_status():
+            return
+        from manual_game_dialog import ManualGameDialog
+        return ManualGameDialog(self)
 
     def undo_game(self):
         if self.busy or not self.current_output or self.store.lock_status():

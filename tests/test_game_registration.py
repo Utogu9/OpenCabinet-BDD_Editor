@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'scripts'))
 from PIL import Image
 from dat_catalog import DatCache
 from editor_store import ArtworkStore, encode_import
-from game_registration import GameRegistration
+from game_registration import GameRegistration, manual_destination
 import game_registration
 
 
@@ -175,6 +175,97 @@ class RegistrationTests(unittest.TestCase):
         catalog = json.loads((output/'catalog.json').read_text(encoding='utf-8'))
         self.assertEqual(catalog['schema_version'],2)
         self.assertEqual(catalog['games']['AGB-TEST-USA']['serial_identifiers'],['AGB-TEST-USA'])
+
+
+    def test_manual_registration_provenance_and_idempotent_undo(self):
+        self.registry.add_manual(self.output, 'Sony - PlayStation', 'Manual Game (USA)',
+                                 'slus 98765', 'Printed on the disc')
+        game = self.read()['games']['SLUS-98765']
+        self.assertTrue((self.output/'SLUS-98765').is_dir())
+        self.assertEqual(self.read()['dat'], self.initial['dat'])
+        self.assertEqual(game['serial_identifiers'], ['SLUS-98765'])
+        entry = game['entries'][0]
+        self.assertEqual(entry['name'], 'Manual Game (USA)')
+        self.assertEqual(entry['provider'], 'manual')
+        self.assertEqual(entry['serial_raw'], 'slus 98765')
+        self.assertEqual(entry['source_provenance']['verification'], 'user_supplied')
+        self.assertEqual(entry['source_provenance']['reference'], 'Printed on the disc')
+        self.assertNotIn('redump_id', entry)
+        self.assertNotIn('dat', game['editor_added_entries'][0])
+        again = self.registry.add_manual(self.output, 'Sony - PlayStation', 'Manual Game (USA)', 'SLUS-98765')
+        self.assertTrue(again[0]['existing'])
+        self.registry.undo(self.output)
+        self.assertNotIn('SLUS-98765', self.read()['games'])
+
+    def test_manual_new_console_without_dat_supports_artwork_and_undo(self):
+        system = 'Nintendo - Future Console'
+        output = self.root/'generated'/system
+        self.registry.add_manual(output, system, 'New Game (World)', '0100ABCDEF123456')
+        catalog = json.loads((output/'catalog.json').read_text('utf-8'))
+        self.assertEqual(catalog['schema_version'], 2)
+        self.assertNotIn('dat', catalog)
+        self.assertEqual(catalog['source_policy'], 'manual-registration-v1')
+        self.assertTrue(any(row['output'] == output for row in self.store.libraries()))
+        self.store.save(output, '0100ABCDEF123456', 'cover_front', 'cover_front', self.encoded)
+        with self.assertRaises(ValueError):
+            self.registry.undo(output)
+        self.store.undo(output, '0100ABCDEF123456')
+        self.registry.undo(output)
+        self.assertFalse((output/'0100ABCDEF123456').exists())
+
+    def test_manual_registration_preserves_existing_artwork_history(self):
+        self.store.save(self.output, 'SLUS-00001', 'cover_front', 'cover_front', self.encoded)
+        self.registry.add_manual(self.output, 'Sony - PlayStation', 'New Game (USA)', 'NEW-123')
+        self.store.undo(self.output, 'SLUS-00001')
+        self.assertIn('NEW-123', self.read()['games'])
+        self.registry.undo(self.output)
+        self.assertEqual(self.read(), self.initial)
+
+    def test_manual_identifiers_refuse_collisions_and_unknown_folders(self):
+        before = (self.output/'catalog.json').read_bytes()
+        original = self.initial['games']['SLUS-00001']['entries'][0]['name']
+        result = self.registry.add_manual(self.output, 'Sony - PlayStation', original, 'slus00001')
+        self.assertTrue(result[0]['existing'])
+        self.assertEqual((self.output/'catalog.json').read_bytes(), before)
+        with self.assertRaises(ValueError):
+            self.registry.add_manual(self.output, 'Sony - PlayStation', 'Different game', 'SLUS-00001')
+        self.registry.add_manual(self.output, 'Sony - PlayStation', 'Literal', 'ABC-123')
+        with self.assertRaises(ValueError):
+            self.registry.add_manual(self.output, 'Sony - PlayStation', 'Slash', 'ABC/123')
+        (self.output/'UNKNOWN-1').mkdir()
+        (self.output/'UNKNOWN-1/keep.txt').write_text('keep', encoding='utf-8')
+        with self.assertRaises(ValueError):
+            self.registry.add_manual(self.output, 'Sony - PlayStation', 'Unknown', 'UNKNOWN-1')
+        self.assertEqual((self.output/'UNKNOWN-1/keep.txt').read_text('utf-8'), 'keep')
+
+    def test_manual_validation_and_folder_substitutions(self):
+        for serial in ['', '!NONE', '!NO-INFO', 'N/A', '../outside', 'ABC/../123',
+                       'C:\\temp\\ID', '/absolute', 'A,B', 'AB\x00CD']:
+            with self.subTest(serial=serial), self.assertRaises(ValueError):
+                manual_destination('New Console', 'Game', serial)
+        with self.assertRaises(ValueError):
+            manual_destination('GamePark - GP32', 'Game', '1')
+        for console in ['', '../console', 'CON', 'Name:Invalid', '_private']:
+            with self.subTest(console=console), self.assertRaises(ValueError):
+                manual_destination(console, 'Game', 'REAL-123')
+        route = manual_destination('New Console', 'Game', 'REAL/123')
+        self.assertEqual(route['serial'], 'REAL/123')
+        self.assertEqual(route['folder'], 'REAL-123')
+
+    def test_manual_failed_registration_rolls_back_new_console(self):
+        output = self.root/'generated/New Console'
+        real_write = game_registration.atomic_bytes
+        failed = False
+        def write(path, data):
+            nonlocal failed
+            if Path(path).name == 'history.json' and not failed:
+                failed = True
+                raise OSError('Interrupted manual registration')
+            real_write(path, data)
+        with patch.object(game_registration, 'atomic_bytes', side_effect=write), self.assertRaises(OSError):
+            self.registry.add_manual(output, 'New Console', 'Game', 'NEW-1')
+        self.assertFalse(output.exists())
+        self.assertFalse(self.registry.has_pending(output))
 
 
 if __name__=='__main__':

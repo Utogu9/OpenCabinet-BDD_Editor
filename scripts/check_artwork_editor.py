@@ -323,6 +323,35 @@ def run():
                     stage = 19
                 elif stage == 19 and not editor.busy and 'SLUS-99999' not in (editor.catalog or {}).get('games',{}):
                     assert not (root/'generated/Sony - PlayStation/SLUS-99999').exists()
+                    assert str(editor.manual_game_button.cget('state')) == 'normal'
+                    dialog = editor.add_manual_game()
+                    dialog.window.withdraw()
+                    dialog.system.set('Nintendo - Future Console')
+                    dialog.name.set('Manual Game (World)')
+                    dialog.serial.set('TEST-MANUAL-1')
+                    dialog.reference.set('Printed on the test cartridge')
+                    assert 'TEST-MANUAL-1' in dialog.preview.get()
+                    assert str(dialog.create_button.cget('state')) == 'normal'
+                    dialog.create()
+                    stage = 191
+                elif stage == 191 and not editor.busy and editor.serial == 'TEST-MANUAL-1':
+                    assert editor.catalog['system'] == 'Nintendo - Future Console'
+                    assert 'dat' not in editor.catalog
+                    entry = editor.catalog['games'][editor.serial]['entries'][0]
+                    assert entry['provider'] == 'manual'
+                    assert entry['source_provenance']['verification'] == 'user_supplied'
+                    editor.import_image('cover_front', 'cover_front')
+                    stage = 192
+                elif stage == 192 and not editor.busy:
+                    assert editor.catalog['games']['TEST-MANUAL-1']['images']['cover_front']['manual']
+                    editor.undo()
+                    stage = 193
+                elif stage == 193 and not editor.busy:
+                    assert not editor.catalog['games']['TEST-MANUAL-1']['images']
+                    editor.undo_game()
+                    stage = 194
+                elif stage == 194 and not editor.busy and 'TEST-MANUAL-1' not in (editor.catalog or {}).get('games', {}):
+                    assert not (root/'generated/Nintendo - Future Console/TEST-MANUAL-1').exists()
                     editor.library_name.set(next(label for label, row in editor.library_rows.items() if row['output'] == output))
                     editor.load_library()
                     stage = 190
@@ -391,6 +420,7 @@ def run():
                           'undo':True, 'add_type':True, 'restore':True, 'console_filter':True,
                           'batch_lock':True, 'pdf_import_open_undo':True, 'console_root_artwork':True,
                           'production_data_modified':False, 'add_game_from_dat':True,
+                          'add_game_manually':True, 'manual_registration_new_console_and_undo':True,
                           'new_game_image_and_undo':True, 'undo_game_registration':True,
                           'english_default':True, 'live_language_switch':True, 'saved_language_restart':True,
                           'svg_logo_import_preview_replace_undo':True,

@@ -3,12 +3,37 @@ from i18n import tr
 from copy import deepcopy
 import json
 from pathlib import Path
+import re
 
 import PIL
 from PIL import features
 
 from editor_common import COMPRESSION_POLICY, digest, is_link, write_json
 from editor_store import atomic_bytes, component, inside, json_bytes, stamp
+from catalog_rules import canonical_serial, serial_folder, WINDOWS_RESERVED
+from serial_policy import exclusion_reason
+
+
+def manual_destination(system, name, serial, reference=''):
+    system, name, raw, reference = (value.strip() for value in (system, name, serial, reference))
+    if (not system or system.startswith(('.', '_')) or re.search(r'[<>:"/\\|?*\x00-\x1f]', system)
+            or system.endswith(('.', ' ')) or WINDOWS_RESERVED.fullmatch(system.split('.')[0])):
+        raise ValueError(tr('Enter a valid console folder name'))
+    if not name or any(ord(c) < 32 for c in name):
+        raise ValueError(tr('Enter the full game name, including region or edition when known'))
+    if (not raw or len(raw) > 200 or ',' in raw or any(ord(c) < 32 for c in raw)
+            or not any(c.isalnum() for c in raw) or raw.startswith(('/', '\\'))
+            or re.match(r'^[A-Za-z]:[/\\]', raw)
+            or any(part in {'.', '..'} for part in re.split(r'[/\\]', raw))):
+        raise ValueError(tr('Enter one serial or title ID, not a file path or a list'))
+    identifier = canonical_serial(raw)
+    if exclusion_reason(identifier, system):
+        raise ValueError(tr('Missing-identifier placeholders cannot be used as a serial'))
+    folder = component(serial_folder(identifier))
+    if any(ord(c) < 32 for c in reference):
+        raise ValueError(tr('Enter a source reference on one line'))
+    return {'system': system, 'name': name, 'serial': identifier, 'serial_raw': raw,
+            'folder': folder, 'reference': reference}
 
 
 def metadata(game):
@@ -88,18 +113,21 @@ class GameRegistration:
             self._recover(output)
             raise
 
-    def _views(self, output, dat=None):
+    def _views(self, output, dat=None, manual_system=None):
         output = self.store.output(output)
         index = output/'catalog.json'
         if (output/'checkpoint.json').exists():
             raise ValueError(tr('This console has a pending conversion; wait for it to finish'))
         if not index.exists():
-            if dat is None or output.exists():
+            if (dat is None and manual_system is None) or output.exists():
                 raise ValueError(tr('The folder exists without a valid catalogue; it will not be adopted or overwritten'))
-            if output.name != dat.system:
+            system = dat.system if dat else manual_system
+            if output.name != system:
                 raise ValueError(tr('The new folder must use the selected console name'))
-            catalog = {'schema_version':2, 'system':dat.system, 'dat':deepcopy(dat.provenance),
-                       'source_policy':'release-metadata-v1', 'status':'complete', 'games':{},
+            catalog = {'schema_version':2, 'system':system,
+                       **({'dat':deepcopy(dat.provenance)} if dat else {}),
+                       'source_policy':'release-metadata-v1' if dat else 'manual-registration-v1',
+                       'status':'complete', 'games':{},
                        'encoding':{'format':'WEBP', 'quality':90, 'method':4, 'lossless':False, 'exact':True,
                                    'compression_policy':COMPRESSION_POLICY, 'pillow':PIL.__version__,
                                    'webp':features.version('webp')}}
@@ -110,6 +138,8 @@ class GameRegistration:
             raise ValueError(tr('The console must have a complete schema 2 serial-based catalogue'))
         if dat and catalog['system'] != dat.system:
             raise ValueError(tr('The DAT and destination console do not match'))
+        if manual_system and catalog['system'] != manual_system:
+            raise ValueError(tr('The console name and destination catalogue do not match'))
         state_path = self.store.state_path(output)
         if state_path.exists():
             state = json.loads(state_path.read_text(encoding='utf-8'))
@@ -128,6 +158,54 @@ class GameRegistration:
                        'applied_catalog_sha256':digest(payloads[output/'catalog.json'])}
             payloads[self.store.state_path(output)] = json_bytes(updated)
         return payloads
+
+    def add_manual(self, output, system, name, serial, reference=''):
+        destination = manual_destination(system, name, serial, reference)
+        output = self.store.output(output)
+        identifier, folder = destination['serial'], destination['folder']
+        with self.store.writer():
+            self._recover(output)
+            catalog, base, state = self._views(output, manual_system=destination['system'])
+            existing = next((key for key in catalog['games'] if key.casefold() == folder.casefold()), None)
+            if existing is not None:
+                game = catalog['games'][existing]
+                known = game.get('serial_identifiers', [existing])
+                if not known or any(canonical_serial(value) != identifier for value in known):
+                    raise ValueError(tr('Destination {v0} already belongs to another identifier: {v1}', v0=existing, v1=known))
+                folder = existing
+            directory = inside(output/folder, output)
+            if directory.exists() and (is_link(directory) or existing is None):
+                raise ValueError(tr('Folder {v0} exists without that catalogue association; it will not be overwritten', v0=folder))
+            before = catalog['games'].get(folder)
+            if before and before.get('entries'):
+                if any(entry.get('name', '').strip().casefold() == destination['name'].casefold()
+                       for entry in before['entries']):
+                    return [{'folder': folder, 'created': False, 'existing': True}]
+                raise ValueError(tr('This identifier is already registered as {v0}. Open that game instead.',
+                                    v0=before['entries'][0]['name']))
+            history_path, _ = self.paths(output)
+            history = json.loads(history_path.read_text('utf-8')) if history_path.exists() else []
+            event = {'at': stamp(), 'before': {folder: metadata(before)}, 'after': {}, 'created': []}
+            create = [output] if not output.exists() else []
+            if not directory.exists():
+                create.append(directory)
+                event['created'].append(folder)
+            provenance = {'provider': 'manual', 'verification': 'user_supplied',
+                          'field': 'user_serial', 'value': identifier,
+                          **({'reference': destination['reference']} if destination['reference'] else {})}
+            entry = {'provider': 'manual', 'name': destination['name'],
+                     'serial_raw': destination['serial_raw'], 'serials': [identifier],
+                     'source_provenance': provenance}
+            for view in (catalog, base):
+                game = view['games'].setdefault(folder, {'serial': folder,
+                    'serial_identifiers': [identifier], 'entries': [], 'images': {}})
+                game['entries'].append(deepcopy(entry))
+                game.setdefault('editor_added_entries', []).append({
+                    'method': 'manual', 'source': deepcopy(provenance), 'serial': identifier, 'at': event['at']})
+            event['after'][folder] = metadata(catalog['games'][folder])
+            history.append(event)
+            self._commit(output, self._payloads(output, catalog, base, state, history), create=create)
+            return [{'folder': folder, 'created': before is None, 'existing': False}]
 
     def add(self, output, dat, entry_id, serials):
         output = self.store.output(output)
