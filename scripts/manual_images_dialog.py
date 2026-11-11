@@ -71,7 +71,7 @@ class ManualImagesDialog:
         if self.busy or self.closed:
             return
         paths = filedialog.askopenfilenames(parent=self.window, title=tr('Select manual page images'),
-            filetypes=[(tr('Images'), '*.png *.jpg *.jpeg *.webp')])
+            filetypes=[(tr('Images'), '*.png *.jpg *.jpeg *.webp *.avif')])
         self.append(paths)
 
     def append(self, paths):

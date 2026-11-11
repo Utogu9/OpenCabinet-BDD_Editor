@@ -17,6 +17,10 @@ def run():
         root = Path(temporary).resolve()
         imported = root/'new.png'
         Image.new('RGBA', (32, 24), (15, 40, 240, 180)).save(imported)
+        # Exercise the AVIF codec inside the packaged executable too.
+        avif = root/'import.avif'
+        Image.new('RGBA', (32, 24), (15, 40, 240, 180)).save(avif, format='AVIF')
+        assert encode_import(avif)['source_format'] == 'AVIF'
         original = root/'original.png'
         Image.new('RGB', (24, 24), 'red').save(original)
         vector = root/'logo.svg'
@@ -47,6 +51,9 @@ def run():
         window = tk.Tk()
         window.withdraw()
         editor = Editor(window, root)
+        assert editor.image_encoding == 'avif'
+        editor.toggle_encoding()
+        assert editor.image_encoding == 'webp'
         failures = []
         window.report_callback_exception = lambda typ, value, tb: failures.append(''.join(traceback.format_exception(typ, value, tb)))
         stage, started = 0, time.monotonic()

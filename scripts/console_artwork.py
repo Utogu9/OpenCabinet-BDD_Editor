@@ -22,7 +22,7 @@ def label_kind(label):
 
 def valid_filename(label, filename):
     kind = label_kind(label)
-    if filename not in {label + '.webp', label + '.svg'} or (filename.endswith('.svg') and kind != 'logo'):
+    if filename not in {label + '.webp', label + '.svg', label + '.avif'} or (filename.endswith('.svg') and kind != 'logo'):
         raise ValueError(tr('Invalid console artwork path.'))
     return filename
 
@@ -43,7 +43,7 @@ class ConsoleArtwork:
         result = {}
         labels = set(values)
         for path in output.iterdir():
-            if path.suffix in {'.webp', '.svg'}:
+            if path.suffix in {'.webp', '.svg', '.avif'}:
                 try:
                     valid_filename(path.stem, path.name)
                 except ValueError:
@@ -52,7 +52,9 @@ class ConsoleArtwork:
         for label in sorted(labels):
             kind = label_kind(label)
             record = values.get(label, {})
-            filename = valid_filename(label, record.get('path', label + '.webp'))
+            fallback = next((label+ext for ext in ('.webp', '.avif', '.svg')
+                             if (output/(label+ext)).is_file()), label+'.webp')
+            filename = valid_filename(label, record.get('path', fallback))
             path = inside(output/filename, output)
             if not path.exists() and kind == 'logo' and not record:
                 path = inside(output/(label+'.svg'), output)
@@ -129,12 +131,16 @@ class ConsoleArtwork:
             values = json.loads(metadata.read_text(encoding='utf-8')) if metadata.exists() else {
                 'schema_version': 1, 'system': catalog['system'], 'images': {}}
             history = json.loads(history_path.read_text(encoding='utf-8')) if history_path.exists() else {'events': []}
-            extension = 'svg' if encoded.get('format') == 'SVG' else 'webp'
+            extension = encoded.get('extension', 'svg' if encoded.get('format') == 'SVG' else 'webp')
+            if extension not in {'svg', 'webp', 'avif'}:
+                raise ValueError(tr('Invalid console artwork path.'))
             destination = inside(output/(label+'.'+extension), output)
             old = values['images'].get(label)
             previous_name = old.get('path', label+'.webp') if old else label+'.webp'
             if not old and not (output/previous_name).exists() and kind == 'logo' and (output/(label+'.svg')).exists():
                 previous_name = label+'.svg'
+            if not old and not (output/previous_name).exists() and (output/(label+'.avif')).exists():
+                previous_name = label+'.avif'
             valid_filename(label, previous_name)
             if create_only and (old is not None or any(path.stem == label for path in output.iterdir())):
                 raise ValueError(tr('This variant already exists; refresh before importing again.'))

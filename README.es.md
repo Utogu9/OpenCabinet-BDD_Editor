@@ -12,7 +12,7 @@ Para ejecutar desde el código fuente:
 2. Ejecutá **Run-Editor.cmd**. La primera vez instala sus dependencias en un entorno propio; necesita Internet solo para esa instalación.
 3. Elegí la carpeta que contiene las consolas y sus `catalog.json`. Puede estar en cualquier ubicación y tener cualquier nombre.
 
-Permite buscar juegos, reemplazar imágenes, agregar variantes, imágenes de consola y manuales CBZ. Para las imágenes, compara WebP sin pérdida y calidad 90 y conserva el menor; las páginas de manuales usan calidad 90 directamente. Guarda los cambios en la biblioteca seleccionada y actualiza sus catálogos.
+Permite buscar juegos, reemplazar imágenes, agregar variantes, imágenes de consola y manuales CBZ. El botón de formato alterna entre **AVIF 60%** (predeterminado) y **WebP 90% / Lossless** (se conserva el menor). La preferencia se guarda en `editor-setting.json` y se aplica a las importaciones y reemplazos de imágenes de juegos y consolas. Las páginas de manuales siguen usando WebP calidad 90. Guarda los cambios en la biblioteca seleccionada y actualiza sus catálogos.
 
 **Importar imagen** y **+ Variante** agregan un archivo numerado cuando ya existe ese tipo (por ejemplo, `logo2.svg`, `screenshot2.webp` o `manual2.cbz`). **Reemplazar** modifica únicamente el archivo seleccionado. Se aplica a imágenes de juegos y consolas y a los manuales; no se crean duplicados idénticos byte por byte y los cambios se pueden deshacer.
 
@@ -59,3 +59,5 @@ Las altas manuales aplican las mismas normalizaciones y sustituciones seguras. S
 Los DAT quedan en una caché local con sus hashes y procedencia. Si No-Intro requiere una descarga interactiva, abrí su sitio e importá el DAT/ZIP Standard oficial. Si faltan seriales, importá después el XML/ZIP original **DB Export**: solo se completan los seriales ausentes usando los campos primarios de medio/digital y la coincidencia del nombre completo. Nunca se usan códigos de PCB, hashes de ROM ni números internos de entrada como identificadores de carpeta. La entrada seleccionada y la procedencia del DAT quedan en `catalog.json`; se conservan los metadatos del DAT principal existente.
 
 **Deshacer última alta de juego** revierte la última incorporación de la consola seleccionada. Las carpetas de juegos nuevos deben estar vacías: primero deshacé sus imágenes importadas. Las altas preservan el historial de imágenes existente y tienen un registro de recuperación ante escrituras interrumpidas. La carpeta privada `dat-cache` no forma parte de una contribución de imágenes.
+
+Se admiten imágenes AVIF para importar, previsualizar y comparar, incluidas las imágenes existentes y las páginas CBZ. Las importaciones usan el formato seleccionado; los archivos existentes solo se convierten al reemplazarlos expresamente. Los logos SVG se conservan en SVG.

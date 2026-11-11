@@ -16,6 +16,7 @@ from PIL import Image, ImageTk
 from editor_store import ArtworkStore, encode_import, inside
 from console_artwork import ConsoleArtwork, CONSOLE_KINDS
 from editor_common import ROOT, settings_path, write_json
+from editor_settings import read_settings, update_settings
 
 KINDS = {'cover_front': 'Front cover', 'cover_back': 'Back cover', 'cover_full': 'Full cover',
          'inlay': 'Inlay (inside cover)',
@@ -39,6 +40,9 @@ class Editor:
     def __init__(self, window, root=ROOT, include_samples=False, library=None, settings=None):
         self.settings_file = Path(settings) if settings is not None else Path(root)/'editor-setting.json'
         initialize_language(self.settings_file)
+        self.image_encoding = read_settings(self.settings_file).get('image_encoding', 'avif')
+        if self.image_encoding not in {'avif', 'webp'}:
+            self.image_encoding = 'avif'
         if library is None:
             self.store = ArtworkStore(root)
         else:
@@ -102,6 +106,8 @@ class Editor:
         self.language_button = ttk.Button(top, text='ES' if language() == 'en' else 'EN', width=3,
                                          command=self.toggle_language)
         self.language_button.pack(side='left', padx=(10, 4))
+        self.encoding_button = ttk.Button(top, text=self.encoding_label(), command=self.toggle_encoding)
+        self.encoding_button.pack(side='right', padx=8)
         localize(ttk.Label(top, style='Muted.TLabel'), '  /  Artwork library', values={}).pack(side='left', pady=8)
         localize(ttk.Button(top, command=self.refresh_libraries), 'Refresh library', values={}).pack(side='right')
         self.status = tk.StringVar(value=tr('Reading library…'))
@@ -348,7 +354,7 @@ class Editor:
         directory = inside(self.current_output/self.serial, self.current_output)
         if directory.exists():
             for path in directory.iterdir():
-                if path.suffix.lower() in {'.webp', '.png', '.jpg', '.jpeg', '.pdf', '.cbz'} and path.stem not in images:
+                if path.suffix.lower() in {'.webp', '.png', '.jpg', '.jpeg', '.avif', '.pdf', '.cbz'} and path.stem not in images:
                     from artwork_actions import image_kind
                     images[path.stem] = {'path': f'{self.serial}/{path.name}', 'kind': image_kind(path.stem, {}), 'bytes': path.stat().st_size}
                     if path.suffix.lower() in {'.pdf', '.cbz'}:
@@ -525,14 +531,15 @@ class Editor:
             return
         is_manual = kind == 'manual'
         logo = self.console_mode and kind == 'logo'
-        filename = filedialog.askopenfilename(parent=self.window, title=tr('Import {v0}.{v1}', v0=label, v1='pdf / cbz' if is_manual else 'svg / webp' if logo else 'webp'),
-            filetypes=[(tr('PDF / CBZ manuals'), '*.pdf *.cbz')] if is_manual else [(tr('Images'), '*.png *.jpg *.jpeg *.webp *.svg' if logo else '*.png *.jpg *.jpeg *.webp'), (tr('All files'), '*.*')])
+        filename = filedialog.askopenfilename(parent=self.window, title=tr('Import {v0}.{v1}', v0=label, v1='pdf / cbz' if is_manual else 'svg / '+self.image_encoding if logo else self.image_encoding),
+            filetypes=[(tr('PDF / CBZ manuals'), '*.pdf *.cbz')] if is_manual else [(tr('Images'), '*.png *.jpg *.jpeg *.webp *.avif *.svg' if logo else '*.png *.jpg *.jpeg *.webp *.avif'), (tr('All files'), '*.*')])
         if not filename:
             return
         output, serial = self.current_output, self.serial
         console = self.console_mode
+        encoding = self.image_encoding
         self.busy = True
-        localize(self.note, 'Checking CBZ pages…' if is_manual and Path(filename).suffix.lower() == '.cbz' else 'Optimizing PDF images and comparing file sizes…' if is_manual else 'Comparing lossless WebP and quality 90…', values={})
+        localize(self.note, 'Checking CBZ pages…' if is_manual and Path(filename).suffix.lower() == '.cbz' else 'Optimizing PDF images and comparing file sizes…' if is_manual else 'Encoding AVIF at quality 60…' if encoding == 'avif' else 'Comparing lossless WebP and quality 90…', values={})
         self.update_buttons()
         def work():
             if logo and Path(filename).suffix.lower() == '.svg':
@@ -546,7 +553,7 @@ class Editor:
                     from pdf_tools import optimize_pdf
                     encoded = optimize_pdf(filename)
             else:
-                encoded = encode_import(filename)
+                encoded = encode_import(filename, encoding=encoding)
             if console:
                 self.console_store.save(output, kind, encoded, label, create_only=create_only)
             else:
@@ -559,6 +566,8 @@ class Editor:
                 localize(self.note, 'Saved original SVG logo.', values={})
             elif encoded.get('format') == 'CBZ':
                 localize(self.note, 'Saved {v0}.cbz · {v1} pages · {v2:.1f} KiB', values={'v0': label, 'v1': encoded['pages'], 'v2': encoded['bytes']/1024})
+            elif encoded.get('format') == 'AVIF':
+                localize(self.note, 'Saved {v0}.avif · quality 60 · {v1:.1f} KiB', values={'v0': label, 'v1': encoded['bytes']/1024})
             elif is_manual:
                 localize(self.note, 'Saved {v0}.pdf · {v1} pages · {v2:.1f} → {v3:.1f} KiB', values={'v0': label, 'v1': encoded['pages'], 'v2': sizes['original'] / 1024, 'v3': encoded['bytes'] / 1024})
             else:
@@ -615,6 +624,7 @@ class Editor:
         else:
             self.cbz_button.pack_forget()
         self.language_button.configure(state='disabled' if self.busy else 'normal')
+        self.encoding_button.configure(state='disabled' if self.busy else 'normal')
         available = not self.busy and not self.store.lock_status()
         self.new_game_button.configure(state='normal' if available else 'disabled')
         self.manual_game_button.configure(state='normal' if available else 'disabled')
@@ -727,6 +737,21 @@ class Editor:
         else:
             set_text(self.status, 'Editing available · Backups and history: {v0}', v0=self.store.manual)
         self.update_buttons()
+
+    def encoding_label(self):
+        return 'AVIF 60%' if self.image_encoding == 'avif' else 'WebP 90% / Lossless'
+
+    def toggle_encoding(self):
+        if self.busy:
+            return
+        encoding = 'webp' if self.image_encoding == 'avif' else 'avif'
+        try:
+            update_settings({'image_encoding': encoding}, self.settings_file)
+        except OSError as exc:
+            messagebox.showerror(tr('Could not save'), str(exc), parent=self.window)
+            return
+        self.image_encoding = encoding
+        self.encoding_button.configure(text=self.encoding_label())
 
     def toggle_language(self):
         if self.busy:

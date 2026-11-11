@@ -21,17 +21,17 @@ def main():
         venv.EnvBuilder(with_pip=True).create(environment)
     check = subprocess.run([str(python), '-c',
         "import tkinter, PIL, pypdf, resvg_py; from PIL import features; "
-        "assert (10, 0) <= tuple(int(n) for n in PIL.__version__.split('.')[:2]) < (13, 0); "
-        "assert pypdf.__version__ == '6.21.2'; assert resvg_py.__version__ == '0.5.0'; assert features.check('webp')"],
+        "assert (11, 3) <= tuple(int(n) for n in PIL.__version__.split('.')[:2]) < (13, 0); "
+        "assert pypdf.__version__ == '6.21.2'; assert resvg_py.__version__ == '0.5.0'; assert features.check('webp'); assert features.check('avif')"],
         capture_output=True)
     if check.returncode:
         print(tr('Installing editor dependencies (Internet access required)...'), flush=True)
         result = subprocess.run([str(python), '-m', 'pip', 'install', '-r', str(ROOT/'requirements-editor.txt')])
         if result.returncode:
             return result.returncode
-        check = subprocess.run([str(python), '-c', 'import tkinter; from PIL import features; assert features.check("webp")'])
+        check = subprocess.run([str(python), '-c', 'import tkinter; from PIL import features; assert features.check("webp"); assert features.check("avif")'])
         if check.returncode:
-            print(tr('This Python installation needs Tkinter and WebP support to run the editor.'))
+            print(tr('This Python installation needs Tkinter, WebP and AVIF support to run the editor.'))
             return 1
     if sys.argv[1:] == ['--install-only']:
         print(tr('Editor installed. Run Run-Editor.cmd to open it.'), flush=True)

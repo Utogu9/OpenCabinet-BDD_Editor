@@ -64,14 +64,16 @@ def json_bytes(value):
     return (json.dumps(value, ensure_ascii=False, indent=2)+'\n').encode('utf-8')
 
 
-def encode_import(path):
+def encode_import(path, encoding="webp"):
+    if encoding not in {"webp", "avif"}:
+        raise ValueError("Unsupported image encoding")
     path = Path(path)
     if path.stat().st_size > 100*1024**2:
         raise ValueError(tr('The image exceeds 100 MiB'))
     raw = path.read_bytes()
     with Image.open(BytesIO(raw)) as original:
-        if original.format not in {'PNG', 'JPEG', 'WEBP'}:
-            raise ValueError(tr('PNG, JPG and WebP files are supported'))
+        if original.format not in {'PNG', 'JPEG', 'WEBP', 'AVIF'}:
+            raise ValueError(tr('PNG, JPG, WebP and AVIF files are supported'))
         if getattr(original, 'n_frames', 1) != 1:
             raise ValueError(tr('The image must be static'))
         if original.width*original.height > 40_000_000:
@@ -79,18 +81,31 @@ def encode_import(path):
         image = ImageOps.exif_transpose(original)
         alpha = 'A' in image.getbands() or 'transparency' in image.info
         image = image.convert('RGBA' if alpha else 'RGB')
-        data, compression = compare_encodings(image, original.info.get('icc_profile'))
+        if encoding == 'avif':
+            buffer = BytesIO()
+            options = {'format': 'AVIF', 'quality': 60, 'speed': 6,
+                       'subsampling': '4:2:0', 'max_threads': 4}
+            if original.info.get('icc_profile'):
+                options['icc_profile'] = original.info['icc_profile']
+            image.save(buffer, **options)
+            data = buffer.getvalue()
+            compression = {'policy': 'avif60-v1', 'lossless': False, 'quality': 60,
+                           'codec': 'AVIF', 'speed': 6, 'subsampling': '4:2:0',
+                           'candidate_bytes': {'avif60': len(data)}}
+        else:
+            data, compression = compare_encodings(image, original.info.get('icc_profile'))
         with Image.open(BytesIO(data)) as check:
             if check.size != image.size:
                 raise ValueError(tr('Conversion changed the dimensions'))
             if compression['lossless'] and check.convert('RGBA').tobytes() != image.convert('RGBA').tobytes():
                 raise ValueError(tr('Lossless conversion changed the pixels'))
-            if alpha and check.convert('RGBA').getchannel('A').tobytes() != image.getchannel('A').tobytes():
+            if encoding == 'webp' and alpha and check.convert('RGBA').getchannel('A').tobytes() != image.getchannel('A').tobytes():
                 raise ValueError(tr('Conversion changed the transparency'))
         return {'data': data, 'original': raw, 'filename': path.name, 'sha256': digest(data),
                 'source_sha256': digest(raw), 'source_format': original.format,
                 'width': image.width, 'height': image.height, 'alpha': alpha,
-                'bytes': len(data), 'compression': compression}
+                'bytes': len(data), 'compression': compression,
+                'format': 'AVIF' if encoding == 'avif' else 'WEBP', 'extension': encoding}
 
 
 class ArtworkStore:
@@ -241,7 +256,7 @@ class ArtworkStore:
                         continue
                     published = deepcopy(asset['catalog_asset'])
                     extension = Path(published['path']).suffix.lower()
-                    if extension not in {'.webp', '.pdf', '.cbz', '.png', '.jpg', '.jpeg'}:
+                    if extension not in {'.webp', '.pdf', '.cbz', '.png', '.jpg', '.jpeg', '.avif'}:
                         raise ValueError(tr('Unsupported manual extension'))
                     relative = f'{component(serial)}/{label}{extension}'
                     destination = inside(output/relative, output)
@@ -257,7 +272,7 @@ class ArtworkStore:
                     game['images'][label] = published
                     continue
                 extension = asset.get('extension', 'webp')
-                if extension not in {'webp', 'pdf', 'cbz'}:
+                if extension not in {'webp', 'avif', 'pdf', 'cbz'}:
                     raise ValueError(tr('Unsupported manual extension'))
                 relative = f'{component(serial)}/{label}.{extension}'
                 destination = inside(output/relative, output)
@@ -460,11 +475,16 @@ class ArtworkStore:
                     extras.add(relative)
                 continue
             with Image.open(BytesIO(original)) as source, Image.open(BytesIO(data)) as converted:
-                if converted.format != 'WEBP' or converted.size != (asset['width'], asset['height']):
+                if converted.format != asset.get('format', 'WEBP') or converted.size != (asset['width'], asset['height']):
                     raise ValueError(tr('Invalid manual dimensions'))
                 decision = asset['compression']
                 sizes = decision['candidate_bytes']
-                if asset['bytes'] != min(sizes.values()) or decision['lossless'] != (sizes['lossless'] <= sizes['lossy90']):
+                if converted.format == 'AVIF':
+                    valid = (decision.get('policy') == 'avif60-v1' and decision.get('quality') == 60
+                             and decision.get('lossless') is False and sizes == {'avif60': len(data)})
+                else:
+                    valid = decision['lossless'] == (sizes['lossless'] <= sizes['lossy90'])
+                if len(data) != asset['bytes'] or asset['bytes'] != min(sizes.values()) or not valid:
                     raise ValueError(tr('Invalid manual compression choice'))
                 if decision['lossless'] and ImageOps.exif_transpose(source).convert('RGBA').tobytes() != converted.convert('RGBA').tobytes():
                     raise ValueError(tr('Invalid lossless manual pixels'))

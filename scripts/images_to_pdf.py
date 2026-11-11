@@ -40,8 +40,8 @@ def images_to_pdf(paths):
             raise ValueError(tr('The image exceeds 100 MiB'))
         raw = path.read_bytes()
         with Image.open(BytesIO(raw)) as original:
-            if original.format not in {'PNG', 'JPEG', 'WEBP'}:
-                raise ValueError(tr('PNG, JPG and WebP files are supported'))
+            if original.format not in {'PNG', 'JPEG', 'WEBP', 'AVIF'}:
+                raise ValueError(tr('PNG, JPG, WebP and AVIF files are supported'))
             if getattr(original, 'n_frames', 1) != 1:
                 raise ValueError(tr('The image must be static'))
             if original.width*original.height > 40_000_000:

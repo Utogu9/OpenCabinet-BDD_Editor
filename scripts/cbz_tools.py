@@ -26,8 +26,8 @@ def images_to_cbz(paths, progress=None):
             raw = path.read_bytes()
             source_bytes += len(raw)
             with Image.open(BytesIO(raw)) as original:
-                if original.format not in {'PNG', 'JPEG', 'WEBP'}:
-                    raise ValueError(tr('PNG, JPG and WebP files are supported'))
+                if original.format not in {'PNG', 'JPEG', 'WEBP', 'AVIF'}:
+                    raise ValueError(tr('PNG, JPG, WebP and AVIF files are supported'))
                 if getattr(original, 'n_frames', 1) != 1:
                     raise ValueError(tr('The image must be static'))
                 if original.width*original.height > 40_000_000:
@@ -108,13 +108,13 @@ def inspect_cbz(data):
                     continue
                 if PurePosixPath(name).name == 'ComicInfo.xml' and entry.file_size <= 1024**2:
                     continue  # Preserve it on import; never interpret XML or extract files.
-                if Path(name).suffix.lower() not in {'.webp', '.png', '.jpg', '.jpeg'} or entry.file_size > 100*1024**2:
-                    raise ValueError(tr('CBZ manuals must contain static PNG, JPG or WebP pages.'))
+                if Path(name).suffix.lower() not in {'.webp', '.png', '.jpg', '.jpeg', '.avif'} or entry.file_size > 100*1024**2:
+                    raise ValueError(tr('CBZ manuals must contain static PNG, JPG, WebP or AVIF pages.'))
                 raw = archive.read(entry)
                 with Image.open(BytesIO(raw)) as image:
-                    if (image.format not in {'PNG', 'JPEG', 'WEBP'} or getattr(image, 'n_frames', 1) != 1
+                    if (image.format not in {'PNG', 'JPEG', 'WEBP', 'AVIF'} or getattr(image, 'n_frames', 1) != 1
                             or image.width*image.height > 40_000_000):
-                        raise ValueError(tr('CBZ manuals must contain static PNG, JPG or WebP pages.'))
+                        raise ValueError(tr('CBZ manuals must contain static PNG, JPG, WebP or AVIF pages.'))
                     image.load()
                     pages.append({'path': name, 'sha256': digest(raw), 'bytes': len(raw),
                                   'width': image.width, 'height': image.height})

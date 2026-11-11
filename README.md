@@ -12,7 +12,7 @@ To run from source:
 2. Run **Run-Editor.cmd**. On first launch, it installs dependencies in its own environment; Internet access is only required for that installation.
 3. Select the folder containing the consoles and their `catalog.json` files. It can have any name and be stored anywhere.
 
-Search games, replace images, add variants, console artwork and CBZ manuals. For artwork, the editor compares lossless WebP with quality 90 WebP and keeps the smaller file; manual pages use quality 90 directly. Changes are saved to the selected library and its catalogues are updated.
+Search games, replace images, add variants, console artwork and CBZ manuals. The format button switches between **AVIF 60%** (default) and **WebP 90% / Lossless** (the smaller file wins). The choice is saved in `editor-setting.json` and applies to new game and console artwork imports and replacements. Manual pages continue to use WebP quality 90. Changes are saved to the selected library and its catalogues are updated.
 
 **Import image** and **+ Variant** add a new numbered file when that type already exists (for example, `logo2.svg`, `screenshot2.webp` or `manual2.cbz`). **Replace** changes only the selected file. This applies to both game and console artwork; byte-identical duplicates are rejected, and changes can be undone.
 
@@ -59,3 +59,5 @@ Manual registrations use the same serial normalization and safe folder substitut
 DAT files are cached locally with their hashes and source information. If No-Intro requires an interactive download, open its website and import the official Standard DAT/ZIP. If that export lacks serials, import the original **DB Export** XML/ZIP afterwards: only missing serials are filled from primary media/digital fields, matching complete game names. PCB numbers, ROM hashes and database entry numbers are never used as game folder identifiers. The selected entry and DAT provenance are recorded in `catalog.json`; its existing primary DAT metadata is preserved.
 
 **Undo last game registration** reverses the last registration for the selected console. New game folders must be empty: undo their imported images first. Registration preserves existing image history and has a recovery journal for interrupted writes. The private `dat-cache` folder is not part of an artwork contribution.
+
+AVIF images are supported for import, previews and comparisons, including existing library artwork and CBZ pages. Imported artwork uses the selected output format; existing files are only converted when explicitly replaced. SVG logos remain SVG.

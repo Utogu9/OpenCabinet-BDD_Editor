@@ -45,7 +45,7 @@ SPANISH = {
     "The CBZ exceeds 300 MiB.": "El CBZ supera los 300 MiB.",
     "The CBZ exceeds the supported archive limits.": "El CBZ supera los límites admitidos para archivos comprimidos.",
     "Invalid CBZ archive path or entry.": "Ruta o entrada no válida dentro del CBZ.",
-    "CBZ manuals must contain static PNG, JPG or WebP pages.": "Los manuales CBZ deben contener páginas estáticas PNG, JPG o WebP.",
+    "CBZ manuals must contain static PNG, JPG, WebP or AVIF pages.": "Los manuales CBZ deben contener páginas estáticas PNG, JPG o WebP.",
     "Invalid or encrypted CBZ archive.": "Archivo CBZ no válido o cifrado.",
     "Pages follow the list order. Add images in batches or one at a time, then use Move up/down to arrange them.": "Las páginas siguen el orden de la lista. Agregá imágenes en grupos o de a una y usá Subir/Bajar para ordenarlas.",
     "No margins or cropping. Images fit within 3840 x 2160 px, preserving proportions. Smaller images are not enlarged.": "Sin márgenes ni recortes. Las imágenes se ajustan a un máximo de 3840 x 2160 píxeles, conservando las proporciones. Las más pequeñas no se amplían.",
@@ -202,7 +202,7 @@ SPANISH = {
     "Path outside the library": "Ruta fuera de la biblioteca",
     "The image exceeds 100 MiB": "La imagen supera 100 MiB",
     "Links are not allowed in editing paths": "No se permiten enlaces en las rutas de edición",
-    "PNG, JPG and WebP files are supported": "Se admiten PNG, JPG y WebP",
+    "PNG, JPG, WebP and AVIF files are supported": "Se admiten PNG, JPG, WebP y AVIF",
     "The image must be static": "La imagen debe ser estática",
     "The image exceeds 40 megapixels": "La imagen supera 40 megapíxeles",
     "Invalid backup hash": "Hash de respaldo inválido",
@@ -307,7 +307,7 @@ SPANISH = {
     "Preparing the editor environment...": "Preparando el entorno del editor...",
     "Installing editor dependencies (Internet access required)...": "Instalando las dependencias del editor (requiere Internet)...",
     "Editor installed. Run Run-Editor.cmd to open it.": "Editor instalado. Ejecutá Run-Editor.cmd para abrirlo.",
-    "This Python installation needs Tkinter and WebP support to run the editor.": "Este Python necesita Tkinter y soporte WebP para ejecutar el editor.",
+    "This Python installation needs Tkinter, WebP and AVIF support to run the editor.": "Este Python necesita Tkinter y soporte WebP y AVIF para ejecutar el editor.",
     "Only No-Intro and Redump are supported": "Solo se admiten No-Intro y Redump",
     "Spine": "Lomo",
     "Disc": "Disco",
@@ -340,3 +340,8 @@ SPANISH = {
     "{v0} · pixel view": "{v0} · vista de píxeles",
     "Could not save language": "No se pudo guardar el idioma"
 }
+
+SPANISH.update({
+    "Encoding AVIF at quality 60\u2026": "Convirtiendo a AVIF con calidad 60\u2026",
+    "Saved {v0}.avif \u00b7 quality 60 \u00b7 {v1:.1f} KiB": "Guardado {v0}.avif \u00b7 calidad 60 \u00b7 {v1:.1f} KiB",
+})
