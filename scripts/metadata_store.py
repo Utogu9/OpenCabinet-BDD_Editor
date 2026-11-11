@@ -170,7 +170,7 @@ class MetadataStore(GameRegistration):
             for view in (catalog, base):
                 self._assign(view, serial, after)
             payloads = self._payloads(output, catalog, base, state, history)
-            if len(payloads[output / 'catalog.json']) >= 100 * 1024 * 1024:
+            if len(payloads[self.store.catalog_path(output)]) >= 100 * 1024 * 1024:
                 raise ValueError(tr('The catalogue would exceed GitHub\'s 100 MiB file limit.'))
             self._commit(output, payloads)
             return True

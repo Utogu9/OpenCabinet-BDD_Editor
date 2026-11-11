@@ -10,6 +10,7 @@ from unittest.mock import patch
 from PIL import Image
 from artwork_editor import Editor
 from editor_store import encode_import
+from catalog_io import encode_catalog, read_catalog
 
 
 def run():
@@ -50,6 +51,9 @@ def run():
         config.write_text(json.dumps({'library':str(root/'generated'),'keep_preference':'unchanged'}))
         window = tk.Tk()
         window.withdraw()
+        catalog_file = output/'catalog.sqlite'
+        catalog_file.write_bytes(encode_catalog(read_catalog(output/'catalog.json'), catalog_file))
+        (output/'catalog.json').unlink()
         editor = Editor(window, root)
         assert editor.image_encoding == 'avif'
         editor.toggle_encoding()
@@ -363,13 +367,13 @@ def run():
                     editor.load_library()
                     stage = 190
                 elif stage == 190 and editor.serial == 'TEST-1':
-                    deletion_snapshot['catalog'] = (output/'catalog.json').read_bytes()
+                    deletion_snapshot['catalog'] = catalog_file.read_bytes()
                     deletion_snapshot['files'] = {p.name: p.read_bytes() for p in folder.iterdir() if p.is_file()}
                     editor.delete_game()
                     stage = 20
                 elif stage == 20 and not editor.busy:
                     assert len(delete_confirmations) == 1
-                    assert (output/'catalog.json').read_bytes() == deletion_snapshot['catalog']
+                    assert catalog_file.read_bytes() == deletion_snapshot['catalog']
                     assert folder.is_dir()
                     editor.delete_game()
                     stage = 21
@@ -381,7 +385,7 @@ def run():
                     editor.undo_game_deletion()
                     stage = 22
                 elif stage == 22 and not editor.busy and editor.serial == 'TEST-1':
-                    assert (output/'catalog.json').read_bytes() == deletion_snapshot['catalog']
+                    assert catalog_file.read_bytes() == deletion_snapshot['catalog']
                     assert {p.name: p.read_bytes() for p in folder.iterdir() if p.is_file()} == deletion_snapshot['files']
                     assert str(editor.delete_game_button.cget('state')) == 'normal'
                     editor.show_console()
@@ -423,7 +427,7 @@ def run():
         set_language('en', persist=False)
         from check_metadata_editor import run as check_metadata
         check_metadata()
-        print(json.dumps({'desktop_ui':'passed', 'search':True, 'replace':True, 'pixel_view':True,
+        print(json.dumps({'desktop_ui':'passed', 'sqlite_catalog_editing':True, 'search':True, 'replace':True, 'pixel_view':True,
                           'undo':True, 'add_type':True, 'restore':True, 'console_filter':True,
                           'batch_lock':True, 'pdf_import_open_undo':True, 'console_root_artwork':True,
                           'production_data_modified':False, 'add_game_from_dat':True,

@@ -10,7 +10,7 @@ To run from source:
 
 1. Install **Python 3.10 or later**, with Tkinter, and enable the `py` launcher or add Python to PATH.
 2. Run **Run-Editor.cmd**. On first launch, it installs dependencies in its own environment; Internet access is only required for that installation.
-3. Select the folder containing the consoles and their `catalog.json` files. It can have any name and be stored anywhere.
+3. Select the folder containing the consoles and their `catalog.json` or `catalog.sqlite` files. It can have any name and be stored anywhere.
 
 Search games, replace images, add variants, console artwork and CBZ manuals. The format button switches between **AVIF 60%** (default) and **WebP 90% / Lossless** (the smaller file wins). The choice is saved in `editor-setting.json` and applies to new game and console artwork imports and replacements. Manual pages continue to use WebP quality 90. Changes are saved to the selected library and its catalogues are updated.
 
@@ -61,3 +61,5 @@ DAT files are cached locally with their hashes and source information. If No-Int
 **Undo last game registration** reverses the last registration for the selected console. New game folders must be empty: undo their imported images first. Registration preserves existing image history and has a recovery journal for interrupted writes. The private `dat-cache` folder is not part of an artwork contribution.
 
 AVIF images are supported for import, previews and comparisons, including existing library artwork and CBZ pages. Imported artwork uses the selected output format; existing files are only converted when explicitly replaced. SVG logos remain SVG.
+
+Libraries support both `catalog.json` and the normalized `catalog.sqlite` format (SQLite storage version 2). The editor detects the format and saves changes in that same format, including artwork, game and console metadata, game registration/deletion and undo. If both files exist, SQLite takes precedence; the JSON copy is left untouched. New consoles still start with JSON. Existing SQLite files are not automatically created or converted.

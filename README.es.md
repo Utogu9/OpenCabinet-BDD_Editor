@@ -10,7 +10,7 @@ Para ejecutar desde el código fuente:
 
 1. Instalá **Python 3.10 o posterior**, con Tkinter, y habilitá el lanzador `py` o agregá Python al PATH.
 2. Ejecutá **Run-Editor.cmd**. La primera vez instala sus dependencias en un entorno propio; necesita Internet solo para esa instalación.
-3. Elegí la carpeta que contiene las consolas y sus `catalog.json`. Puede estar en cualquier ubicación y tener cualquier nombre.
+3. Elegí la carpeta que contiene las consolas y sus `catalog.json` o `catalog.sqlite`. Puede estar en cualquier ubicación y tener cualquier nombre.
 
 Permite buscar juegos, reemplazar imágenes, agregar variantes, imágenes de consola y manuales CBZ. El botón de formato alterna entre **AVIF 60%** (predeterminado) y **WebP 90% / Lossless** (se conserva el menor). La preferencia se guarda en `editor-setting.json` y se aplica a las importaciones y reemplazos de imágenes de juegos y consolas. Las páginas de manuales siguen usando WebP calidad 90. Guarda los cambios en la biblioteca seleccionada y actualiza sus catálogos.
 
@@ -61,3 +61,5 @@ Los DAT quedan en una caché local con sus hashes y procedencia. Si No-Intro req
 **Deshacer última alta de juego** revierte la última incorporación de la consola seleccionada. Las carpetas de juegos nuevos deben estar vacías: primero deshacé sus imágenes importadas. Las altas preservan el historial de imágenes existente y tienen un registro de recuperación ante escrituras interrumpidas. La carpeta privada `dat-cache` no forma parte de una contribución de imágenes.
 
 Se admiten imágenes AVIF para importar, previsualizar y comparar, incluidas las imágenes existentes y las páginas CBZ. Las importaciones usan el formato seleccionado; los archivos existentes solo se convierten al reemplazarlos expresamente. Los logos SVG se conservan en SVG.
+
+Las bibliotecas admiten `catalog.json` y el formato normalizado `catalog.sqlite` (versión de almacenamiento SQLite 2). El editor detecta el formato y guarda los cambios en ese mismo formato, incluidas las imágenes, los metadatos de juegos y consolas, el alta y la eliminación de juegos y Deshacer. Si existen ambos archivos, se usa SQLite y no se modifica la copia JSON. Las consolas nuevas siguen creándose con JSON. No se crean ni convierten catálogos SQLite automáticamente.

@@ -21,7 +21,7 @@ class GameDeletion(GameRegistration):
         self._recover(output)
         GameRegistration(self.store)._recover(output)
         MetadataStore(self.store)._recover(output)
-        inside(output / 'catalog.json', output)
+        self.store.catalog_path(output)
         return self._views(output)
 
     def _snapshot(self, output, serial, catalog):
@@ -58,7 +58,7 @@ class GameDeletion(GameRegistration):
             visit(directory)
         for asset in catalog['games'][serial].get('images', {}).values():
             inside(output / asset['path'], directory)
-        contents = {'catalog_sha256': digest((output / 'catalog.json').read_bytes()),
+        contents = {'catalog_sha256': digest(self.store.catalog_path(output).read_bytes()),
                     'files': files, 'directories': [p.relative_to(output).as_posix() for p in directories]}
         titles = [e['name'] for e in catalog['games'][serial].get('entries', []) if e.get('name')]
         return {**contents, 'token': digest(json_bytes(contents)), 'serial': serial,

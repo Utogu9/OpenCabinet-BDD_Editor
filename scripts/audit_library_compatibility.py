@@ -7,6 +7,7 @@ import sys
 
 import catalog_rules
 from editor_common import compare_encodings, COMPRESSION_POLICY, write_json
+from catalog_io import catalog_path, read_catalog
 
 
 def run(workspace):
@@ -33,7 +34,10 @@ def run(workspace):
         dat = workspace/meta['dat']['path'] if 'path' in meta['dat'] else path.parent/meta['dat']['filename']
         registered[meta['system']] = (dat,provider)
     rows = []
-    for index in sorted((workspace/'generated').glob('*/catalog.json')):
+    folders = {p.parent for name in ('catalog.json', 'catalog.sqlite')
+               for p in (workspace/'generated').glob('*/'+name)}
+    for folder in sorted(folders):
+        index = catalog_path(folder)
         system = index.parent.name
         if system.startswith('_') or system not in registered:
             continue
@@ -52,7 +56,7 @@ def run(workspace):
         for entry in entries:
             if catalog_rules.metadata_identity(entry['name']) != reference.metadata_identity(entry['name']):
                 raise AssertionError('Name normalization differs: '+entry['name'])
-        actual = json.loads(index.read_text(encoding='utf-8'))
+        actual = read_catalog(index)
         checked = 0
         for folder, game in actual['games'].items():
             for serial in game['serial_identifiers']:

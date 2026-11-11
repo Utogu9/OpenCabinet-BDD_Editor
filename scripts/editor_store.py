@@ -13,6 +13,7 @@ import time
 
 from PIL import Image, ImageOps
 from editor_common import ROOT, compare_encodings, digest, is_link, write_json
+from catalog_io import catalog_path, read_catalog, decode_catalog, encode_catalog, sample_directories
 
 
 def stamp():
@@ -141,10 +142,12 @@ class ArtworkStore:
     def manifest_path(self, system, serial):
         return inside(self.manual/component(system)/component(serial)/'edits.json', self.root)
 
-    def read_catalog(self, output):
+    def catalog_path(self, output, *, checkpoint=False):
         output = self.output(output)
-        path = output/'checkpoint.json' if (output/'checkpoint.json').exists() else output/'catalog.json'
-        return json.loads(path.read_text(encoding='utf-8'))
+        return inside(catalog_path(output, checkpoint=checkpoint), output)
+
+    def read_catalog(self, output):
+        return read_catalog(self.catalog_path(output, checkpoint=True))
 
     def libraries(self, samples=False):
         if not self.generated.exists():
@@ -155,12 +158,12 @@ class ArtworkStore:
             candidates += [p for version in revisions.iterdir() if version.is_dir()
                            for p in version.iterdir() if p.is_dir()]
         if samples and (self.generated/'_samples').exists():
-            candidates += [p.parent for p in (self.generated/'_samples').rglob('catalog.json')]
+            candidates += sample_directories(self.generated/'_samples')
         result = []
         for output in candidates:
             try:
                 output = self.output(output)
-                index = output/'checkpoint.json' if (output/'checkpoint.json').exists() else output/'catalog.json'
+                index = self.catalog_path(output, checkpoint=True)
                 if not index.exists():
                     continue
                 # Read system from the folder layout; large catalogues load on demand.
@@ -200,8 +203,10 @@ class ArtworkStore:
             return
         state = json.loads(state_path.read_text(encoding='utf-8'))
         base = self.read_blob(state['base_catalog'])
-        catalog_path = inside(output/'catalog.json', output)
-        if catalog_path.exists() and digest(catalog_path.read_bytes()) not in {
+        path = self.catalog_path(output)
+        if state.get('catalog_filename', path.name) != path.name:
+            raise ValueError(tr('The catalogue changed outside the editor'))
+        if path.exists() and digest(path.read_bytes()) not in {
                 digest(base), state['applied_catalog_sha256']}:
             raise ValueError(tr('The catalogue changed outside the editor; it will not be overwritten'))
         plan = []
@@ -217,18 +222,18 @@ class ArtworkStore:
                 destination.unlink(missing_ok=True)
             else:
                 atomic_bytes(destination, previous)
-        atomic_bytes(catalog_path, base)
+        atomic_bytes(path, base)
         state_path.unlink()
 
     def apply_to_output(self, output):
         """Caller owns batch.lock. Apply edits to a finished, verified catalogue."""
         output = self.output(output)
         self.restore_output(output)
-        path = output/'catalog.json'
+        path = self.catalog_path(output)
         if not path.exists():
             return 0
         raw = path.read_bytes()
-        catalog = json.loads(raw)
+        catalog = decode_catalog(raw)
         if catalog.get('schema_version') != 2 or catalog.get('status') not in {'complete', 'sample_complete'}:
             return 0
         system = component(catalog['system'])
@@ -301,9 +306,10 @@ class ArtworkStore:
             return 0
         count = sum(record['manual_sha256'] is not None for record in files.values())
         edited['manual_edits'] = {'schema_version': 1, 'images': count, 'updated_at': stamp()}
-        encoded_catalog = json_bytes(edited)
+        encoded_catalog = encode_catalog(edited, path)
         state = {'output': str(output.relative_to(self.generated)), 'base_catalog': self.blob(raw),
-                 'applied_catalog_sha256': digest(encoded_catalog), 'files': files}
+                 'applied_catalog_sha256': digest(encoded_catalog), 'files': files,
+                 'catalog_filename': path.name}
         state_path = self.state_path(output)
         # Durable journal before touching the export; recover after any interrupted save.
         write_json(state_path, state)
@@ -418,9 +424,9 @@ class ArtworkStore:
                 raise ValueError(tr('The edited catalogue backup is missing'))
             return actual, {}, set()
         state = json.loads(state_path.read_text(encoding='utf-8'))
-        if digest((output/'catalog.json').read_bytes()) != state['applied_catalog_sha256']:
+        if digest(self.catalog_path(output).read_bytes()) != state['applied_catalog_sha256']:
             raise ValueError(tr('Incomplete edit or manually modified catalogue'))
-        base = json.loads(self.read_blob(state['base_catalog']))
+        base = decode_catalog(self.read_blob(state['base_catalog']))
         redirects, extras = {}, set()
         for relative, record in state['files'].items():
             path = inside(output/relative, output)

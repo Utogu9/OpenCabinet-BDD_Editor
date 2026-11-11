@@ -12,6 +12,7 @@ from editor_common import COMPRESSION_POLICY, digest, is_link, write_json
 from editor_store import atomic_bytes, component, inside, json_bytes, stamp
 from catalog_rules import canonical_serial, serial_folder, WINDOWS_RESERVED
 from serial_policy import exclusion_reason
+from catalog_io import decode_catalog, encode_catalog
 
 
 def manual_destination(system, name, serial, reference=''):
@@ -115,7 +116,7 @@ class GameRegistration:
 
     def _views(self, output, dat=None, manual_system=None):
         output = self.store.output(output)
-        index = output/'catalog.json'
+        index = self.store.catalog_path(output)
         if (output/'checkpoint.json').exists():
             raise ValueError(tr('This console has a pending conversion; wait for it to finish'))
         if not index.exists():
@@ -133,7 +134,7 @@ class GameRegistration:
                                    'webp':features.version('webp')}}
             return catalog, deepcopy(catalog), None
         raw = index.read_bytes()
-        catalog = json.loads(raw)
+        catalog = decode_catalog(raw)
         if catalog.get('schema_version') != 2 or catalog.get('status') not in {'complete', 'sample_complete'}:
             raise ValueError(tr('The console must have a complete schema 2 serial-based catalogue'))
         if dat and catalog['system'] != dat.system:
@@ -145,17 +146,21 @@ class GameRegistration:
             state = json.loads(state_path.read_text(encoding='utf-8'))
             if state['applied_catalog_sha256'] != digest(raw):
                 raise ValueError(tr('The catalogue changed outside the editor'))
-            base = json.loads(self.store.read_blob(state['base_catalog']))
+            if state.get('catalog_filename', index.name) != index.name:
+                raise ValueError(tr('The catalogue changed outside the editor'))
+            base = decode_catalog(self.store.read_blob(state['base_catalog']))
         else:
             state, base = None, deepcopy(catalog)
         return catalog, base, state
 
     def _payloads(self, output, catalog, base, state, history):
         history_path, _ = self.paths(output)
-        payloads = {output/'catalog.json':json_bytes(catalog), history_path:json_bytes(history)}
+        index = self.store.catalog_path(output)
+        payloads = {index:encode_catalog(catalog, index), history_path:json_bytes(history)}
         if state is not None:
-            updated = {**state, 'base_catalog':self.store.blob(json_bytes(base)),
-                       'applied_catalog_sha256':digest(payloads[output/'catalog.json'])}
+            updated = {**state, 'base_catalog':self.store.blob(encode_catalog(base, index)),
+                       'catalog_filename':index.name,
+                       'applied_catalog_sha256':digest(payloads[index])}
             payloads[self.store.state_path(output)] = json_bytes(updated)
         return payloads
 

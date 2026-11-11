@@ -6,6 +6,7 @@ from pathlib import Path
 from editor_store import ArtworkStore
 from editor_common import is_link, write_json
 from editor_settings import read_settings, update_settings
+from catalog_io import catalog_path, read_catalog, sample_directories
 
 
 def valid_library(directory, samples=False):
@@ -18,15 +19,15 @@ def valid_library(directory, samples=False):
         candidates += [p for v in revisions.iterdir() if v.is_dir() and not is_link(v)
                        for p in v.iterdir() if p.is_dir()]
     if samples and (directory/'_samples').is_dir() and not is_link(directory/'_samples'):
-        candidates += [p.parent for p in (directory/'_samples').rglob('catalog.json')]
+        candidates += sample_directories(directory/'_samples')
     for candidate in candidates:
         if is_link(candidate):
             continue
-        index = candidate/'checkpoint.json' if (candidate/'checkpoint.json').exists() else candidate/'catalog.json'
+        index = catalog_path(candidate, checkpoint=True)
         try:
             if is_link(index):
                 continue
-            catalog = json.loads(index.read_text(encoding='utf-8-sig'))
+            catalog = read_catalog(index)
             if (catalog.get('schema_version') in {2, 3} and isinstance(catalog.get('system'), str)
                     and isinstance(catalog.get('games'), dict)):
                 return True
@@ -67,7 +68,7 @@ def choose_library(root, settings, ask, error, samples=False):
                 # Read-only application folders must not prevent opening artwork.
                 pass
             return result
-        error(tr('No valid library was found. Choose the folder containing the consoles and their catalog.json files, or the project folder containing generated.'))
+        error(tr('No valid library was found. Choose the folder containing the consoles and their catalog.json or catalog.sqlite files, or the project folder containing generated.'))
 
 
 class LocatedArtworkStore(ArtworkStore):

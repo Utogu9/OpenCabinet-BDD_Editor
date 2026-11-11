@@ -345,3 +345,15 @@ SPANISH.update({
     "Encoding AVIF at quality 60\u2026": "Convirtiendo a AVIF con calidad 60\u2026",
     "Saved {v0}.avif \u00b7 quality 60 \u00b7 {v1:.1f} KiB": "Guardado {v0}.avif \u00b7 calidad 60 \u00b7 {v1:.1f} KiB",
 })
+
+SPANISH.update({
+    "No valid library was found. Choose the folder containing the consoles and their catalog.json or catalog.sqlite files, or the project folder containing generated.": "No encontr\u00e9 una biblioteca v\u00e1lida. Eleg\u00ed la carpeta que contiene las consolas y sus catalog.json o catalog.sqlite, o la carpeta del proyecto que contiene generated.",
+})
+
+SPANISH.update({
+    'Invalid SQLite catalog header': "Cabecera de cat\u00e1logo SQLite no v\u00e1lida",
+    'Unsupported SQLite catalog version': "Versi\u00f3n de cat\u00e1logo SQLite no compatible",
+    'Invalid SQLite catalog structure': "Estructura de cat\u00e1logo SQLite no v\u00e1lida",
+    'Invalid SQLite catalog references': "Referencias de cat\u00e1logo SQLite no v\u00e1lidas",
+    'SQLite catalog has an active journal; close other database tools before editing it.': "El cat\u00e1logo SQLite tiene un registro de transacciones activo; cerr\u00e1 otras herramientas de base de datos antes de editarlo.",
+})
