@@ -592,6 +592,9 @@ class Editor:
         self.games = dict(self.catalog['games'])
         self.serial = serial
         self.filter_games()
+        # Treeview selection events are queued. Refresh immediately so another
+        # action cannot use the previous image hash after a swap or replacement.
+        self.select_game()
 
     def reset(self, label):
         if not self.can_edit():
