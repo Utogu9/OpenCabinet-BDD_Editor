@@ -18,6 +18,8 @@ Search games, replace images, add variants, console artwork and CBZ manuals. The
 
 **Delete** removes the selected file and its catalogue entry, keeping a backup for **Undo change**. **Make primary** swaps a numbered variant with the main file (or promotes it if the main file is missing), preserving the original bytes, credits and metadata. These actions also support CBZ manuals. **Compare** opens two images from the current game or console side by side, with shared zoom and pan, dimensions and file sizes; SVG logos are supported. The `inlay` type is for the inside face of a back cover or full cover.
 
+Use `cover_full_material` for an optional full-cover material map: R = bump height, G = roughness, B = reserved (0), A = specular intensity. Alpha stores data rather than cover transparency. Match the framing, orientation and proportions of `cover_full`, preferably with the same pixel dimensions. Import an 8-bit RGBA PNG or lossless WebP exported with `lossless` and `exact` enabled. Material imports and replacements always save lossless RGBA PNG, preserving hidden RGB at alpha zero without resizing, rotation or colour transforms; the AVIF/WebP format button does not apply to this type. Variants (`cover_full_material2.png`, etc.), replacement, deletion, primary selection and undo work as for other game images.
+
 Backups and history are stored in `_editor` inside the selected library; if the library is named `generated`, they are stored in `manual` alongside it. Keep these backups to undo changes.
 
 Use `label` for the sticker on a game cartridge. Files are saved as `label.webp`, `label2.webp`, etc., with the same WebP optimization and editing actions as other game artwork.
@@ -63,3 +65,5 @@ DAT files are cached locally with their hashes and source information. If No-Int
 AVIF images are supported for import, previews and comparisons, including existing library artwork and CBZ pages. Imported artwork uses the selected output format; existing files are only converted when explicitly replaced. SVG logos remain SVG.
 
 Libraries support both `catalog.json` and the normalized `catalog.sqlite` format (SQLite storage version 2). The editor detects the format and saves changes in that same format, including artwork, game and console metadata, game registration/deletion and undo. If both files exist, SQLite takes precedence; the JSON copy is left untouched. New consoles still start with JSON. Existing SQLite files are not automatically created or converted.
+
+Updated importers can run concurrently on different consoles. Imports for the same console are exclusive. The editor remains protected by the shared library lock while any import is active; the status lists the consoles being imported. Older editor executables also respect the compatibility lock.

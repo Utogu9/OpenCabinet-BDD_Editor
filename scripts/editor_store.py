@@ -177,6 +177,10 @@ class ArtworkStore:
     def lock_status(self):
         lock = self.root/'reports/batch.lock'
         if lock.exists():
+            from console_locks import read, OWNER
+            info = read(lock)
+            if isinstance(info, dict) and info.get('owner') == OWNER and isinstance(info.get('consoles'), list):
+                return tr('Imports are running for: {v0}', v0=', '.join(str(value) for value in info['consoles']))
             return tr('Run-Library or another editor is using the library')
         return ''
 
@@ -187,7 +191,7 @@ class ArtworkStore:
         try:
             handle = lock.open('x', encoding='utf-8')
         except FileExistsError:
-            raise ValueError(tr('The library is in use. Wait for Run-Library to finish before editing.'))
+            raise ValueError(tr('The library is in use by an editor or importer. Wait for active writes to finish.'))
         try:
             with handle:
                 handle.write(json.dumps({'pid': os.getpid(), 'started_at_utc': stamp(), 'owner': 'artwork-editor'}))
@@ -277,7 +281,7 @@ class ArtworkStore:
                     game['images'][label] = published
                     continue
                 extension = asset.get('extension', 'webp')
-                if extension not in {'webp', 'avif', 'pdf', 'cbz'}:
+                if extension not in {'webp', 'avif', 'png', 'pdf', 'cbz'}:
                     raise ValueError(tr('Unsupported manual extension'))
                 relative = f'{component(serial)}/{label}.{extension}'
                 destination = inside(output/relative, output)
@@ -332,6 +336,12 @@ class ArtworkStore:
             raise ValueError(tr('Use lowercase letters, numbers and underscores for the type'))
         if (kind == 'manual') != (encoded.get('format') in {'PDF', 'CBZ'}):
             raise ValueError(tr('The manual type accepts PDF or CBZ files; other types accept images.'))
+        if kind == 'cover_full_material':
+            from material_maps import POLICY
+            if (encoded.get('format') != 'PNG' or encoded.get('extension') != 'png'
+                    or encoded.get('compression', {}).get('policy') != POLICY
+                    or encoded['compression'].get('lossless') is not True):
+                raise ValueError(tr('Material maps must be imported as lossless RGBA data.'))
         with self.writer():
             catalog = self.read_catalog(output)
             if catalog.get('status') not in {'complete', 'sample_complete'} or catalog.get('schema_version') != 2:
@@ -485,15 +495,22 @@ class ArtworkStore:
                     raise ValueError(tr('Invalid manual dimensions'))
                 decision = asset['compression']
                 sizes = decision['candidate_bytes']
-                if converted.format == 'AVIF':
+                if asset.get('kind') == 'cover_full_material':
+                    from material_maps import POLICY
+                    valid = (converted.format == 'PNG' and converted.mode == 'RGBA'
+                             and decision.get('policy') == POLICY and decision.get('lossless') is True
+                             and sizes == {'png': len(data)})
+                elif converted.format == 'AVIF':
                     valid = (decision.get('policy') == 'avif60-v1' and decision.get('quality') == 60
                              and decision.get('lossless') is False and sizes == {'avif60': len(data)})
                 else:
                     valid = decision['lossless'] == (sizes['lossless'] <= sizes['lossy90'])
                 if len(data) != asset['bytes'] or asset['bytes'] != min(sizes.values()) or not valid:
                     raise ValueError(tr('Invalid manual compression choice'))
-                if decision['lossless'] and ImageOps.exif_transpose(source).convert('RGBA').tobytes() != converted.convert('RGBA').tobytes():
-                    raise ValueError(tr('Invalid lossless manual pixels'))
+                if decision['lossless']:
+                    source_pixels = source if asset.get('kind') == 'cover_full_material' else ImageOps.exif_transpose(source)
+                    if source_pixels.convert('RGBA').tobytes() != converted.convert('RGBA').tobytes():
+                        raise ValueError(tr('Invalid lossless manual pixels'))
             if record['base']:
                 self.read_blob(record['base'])
                 redirects[relative] = inside(self.root/record['base'], self.manual/'blobs')

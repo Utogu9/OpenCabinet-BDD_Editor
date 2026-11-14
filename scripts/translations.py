@@ -1,5 +1,13 @@
 """Spanish translations for English source messages."""
 SPANISH = {
+    "Full cover material (bump and reflections)": "Material de cubierta completa (relieve y reflejos)",
+    "Material maps (RGBA PNG / lossless WebP)": "Mapas de material (PNG RGBA / WebP sin pérdida)",
+    "Saving material channels as lossless RGBA PNG…": "Guardando los canales del material como PNG RGBA sin pérdida…",
+    "Saved {v0}.png · lossless RGBA data · {v1:.1f} KiB": "Guardado {v0}.png · datos RGBA sin pérdida · {v1:.1f} KiB",
+    "Material maps require an 8-bit RGBA PNG or lossless WebP; AVIF and JPEG are not supported.": "Los mapas de material requieren PNG RGBA de 8 bits o WebP sin pérdida; AVIF y JPEG no son compatibles.",
+    "Material PNG files must use RGBA with 8 bits per channel.": "Los PNG de material deben usar RGBA con 8 bits por canal.",
+    "Material WebP files must be lossless. Export with lossless and exact enabled to retain hidden RGB values.": "Los WebP de material deben ser sin pérdida. Exportalos con lossless y exact para conservar el RGB oculto.",
+    "Material maps must be imported as lossless RGBA data.": "Los mapas de material deben importarse como datos RGBA sin pérdida.",
     "Add game manually": "Agregar juego manualmente",
     "Console (choose one or enter a new name)": "Consola (elegí una o escribí un nombre nuevo)",
     "Full game name (including region / edition)": "Nombre completo del juego (incluyendo región / edición)",
@@ -356,4 +364,9 @@ SPANISH.update({
     'Invalid SQLite catalog structure': "Estructura de cat\u00e1logo SQLite no v\u00e1lida",
     'Invalid SQLite catalog references': "Referencias de cat\u00e1logo SQLite no v\u00e1lidas",
     'SQLite catalog has an active journal; close other database tools before editing it.': "El cat\u00e1logo SQLite tiene un registro de transacciones activo; cerr\u00e1 otras herramientas de base de datos antes de editarlo.",
+})
+
+SPANISH.update({
+ "Imports are running for: {v0}": "Hay importaciones en curso para: {v0}",
+ "The library is in use by an editor or importer. Wait for active writes to finish.": "La biblioteca est\u00e1 en uso por un editor o importador. Esper\u00e1 a que terminen las escrituras activas.",
 })

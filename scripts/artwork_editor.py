@@ -19,6 +19,7 @@ from editor_common import ROOT, settings_path, write_json
 from editor_settings import read_settings, update_settings
 
 KINDS = {'cover_front': 'Front cover', 'cover_back': 'Back cover', 'cover_full': 'Full cover',
+         'cover_full_material': 'Full cover material (bump and reflections)',
          'inlay': 'Inlay (inside cover)',
          'poster_front': 'Front poster', 'poster_back': 'Back poster',
          'spine': 'Spine', 'disc': 'Disc', 'cartridge': 'Cartridge',
@@ -530,19 +531,32 @@ class Editor:
         if not self.can_edit():
             return
         is_manual = kind == 'manual'
+        is_material = kind == 'cover_full_material'
         logo = self.console_mode and kind == 'logo'
-        filename = filedialog.askopenfilename(parent=self.window, title=tr('Import {v0}.{v1}', v0=label, v1='pdf / cbz' if is_manual else 'svg / '+self.image_encoding if logo else self.image_encoding),
-            filetypes=[(tr('PDF / CBZ manuals'), '*.pdf *.cbz')] if is_manual else [(tr('Images'), '*.png *.jpg *.jpeg *.webp *.avif *.svg' if logo else '*.png *.jpg *.jpeg *.webp *.avif'), (tr('All files'), '*.*')])
+        if is_manual:
+            extension_hint = 'pdf / cbz'
+            filetypes = [(tr('PDF / CBZ manuals'), '*.pdf *.cbz')]
+        elif is_material:
+            extension_hint = 'png'
+            filetypes = [(tr('Material maps (RGBA PNG / lossless WebP)'), '*.png *.webp'), (tr('All files'), '*.*')]
+        else:
+            extension_hint = 'svg / '+self.image_encoding if logo else self.image_encoding
+            filetypes = [(tr('Images'), '*.png *.jpg *.jpeg *.webp *.avif *.svg' if logo else '*.png *.jpg *.jpeg *.webp *.avif'), (tr('All files'), '*.*')]
+        filename = filedialog.askopenfilename(parent=self.window,
+            title=tr('Import {v0}.{v1}', v0=label, v1=extension_hint), filetypes=filetypes)
         if not filename:
             return
         output, serial = self.current_output, self.serial
         console = self.console_mode
         encoding = self.image_encoding
         self.busy = True
-        localize(self.note, 'Checking CBZ pages…' if is_manual and Path(filename).suffix.lower() == '.cbz' else 'Optimizing PDF images and comparing file sizes…' if is_manual else 'Encoding AVIF at quality 60…' if encoding == 'avif' else 'Comparing lossless WebP and quality 90…', values={})
+        localize(self.note, 'Saving material channels as lossless RGBA PNG…' if is_material else 'Checking CBZ pages…' if is_manual and Path(filename).suffix.lower() == '.cbz' else 'Optimizing PDF images and comparing file sizes…' if is_manual else 'Encoding AVIF at quality 60…' if encoding == 'avif' else 'Comparing lossless WebP and quality 90…', values={})
         self.update_buttons()
         def work():
-            if logo and Path(filename).suffix.lower() == '.svg':
+            if is_material:
+                from material_maps import encode_material
+                encoded = encode_material(filename)
+            elif logo and Path(filename).suffix.lower() == '.svg':
                 from svg_tools import encode_svg
                 encoded = encode_svg(filename)
             elif is_manual:
@@ -562,7 +576,9 @@ class Editor:
         def done(encoded):
             self.busy = False
             sizes = encoded['compression']['candidate_bytes']
-            if encoded.get('format') == 'SVG':
+            if is_material:
+                localize(self.note, 'Saved {v0}.png · lossless RGBA data · {v1:.1f} KiB', values={'v0': label, 'v1': encoded['bytes']/1024})
+            elif encoded.get('format') == 'SVG':
                 localize(self.note, 'Saved original SVG logo.', values={})
             elif encoded.get('format') == 'CBZ':
                 localize(self.note, 'Saved {v0}.cbz · {v1} pages · {v2:.1f} KiB', values={'v0': label, 'v1': encoded['pages'], 'v2': encoded['bytes']/1024})
