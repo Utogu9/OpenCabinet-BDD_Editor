@@ -1,5 +1,6 @@
 """Exercise the real Tk UI without touching the user's generated library."""
 import json
+from io import BytesIO
 from pathlib import Path
 import tempfile
 import time
@@ -16,6 +17,18 @@ from catalog_io import encode_catalog, read_catalog
 def run():
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary).resolve()
+        # Material channels must survive packaging, including RGB under alpha zero.
+        from material_maps import encode_material
+        material = Image.new('RGBA', (4, 3), (128, 255, 0, 0))
+        material.putpixel((1, 1), (150, 35, 0, 210))
+        material_path = root/'material.png'
+        material.save(material_path)
+        encoded_material = encode_material(material_path)
+        assert encoded_material['format'] == 'PNG'
+        assert encoded_material['compression']['lossless'] is True
+        with Image.open(BytesIO(encoded_material['data'])) as decoded_material:
+            assert decoded_material.mode == 'RGBA'
+            assert decoded_material.tobytes() == material.tobytes()
         imported = root/'new.png'
         Image.new('RGBA', (32, 24), (15, 40, 240, 180)).save(imported)
         # Exercise the AVIF codec inside the packaged executable too.
