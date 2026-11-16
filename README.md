@@ -14,6 +14,8 @@ To run from source:
 
 Search games, replace images, add variants, console artwork and CBZ manuals. The format button switches between **AVIF 60%** (default) and **WebP 90% / Lossless** (the smaller file wins). The choice is saved in `editor-setting.json` and applies to new game and console artwork imports and replacements. Manual pages continue to use WebP quality 90. Changes are saved to the selected library and its catalogues are updated.
 
+**Console artwork** supports `logo`, `render`, `screenshot` and `spine`. The console-level `spine` is a default spine template for games without their own `cover_full` or `spine`. It is saved at the console directory root as `spine.avif` or `spine.webp` and registered in `console_artwork.json`. It supports numbered variants, replacement, comparison, choosing a primary image, deletion and undo, like the other console artwork types.
+
 **Import image** and **+ Variant** add a new numbered file when that type already exists (for example, `logo2.svg`, `screenshot2.webp` or `manual2.cbz`). **Replace** changes only the selected file. This applies to both game and console artwork; byte-identical duplicates are rejected, and changes can be undone.
 
 **Delete** removes the selected file and its catalogue entry, keeping a backup for **Undo change**. **Make primary** swaps a numbered variant with the main file (or promotes it if the main file is missing), preserving the original bytes, credits and metadata. These actions also support CBZ manuals. **Compare** opens two images from the current game or console side by side, with shared zoom and pan, dimensions and file sizes; SVG logos are supported. The `inlay` type is for the inside face of a back cover or full cover.

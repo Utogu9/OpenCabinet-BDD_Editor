@@ -120,6 +120,44 @@ class ConsoleArtworkTests(unittest.TestCase):
             with self.subTest(label=label), self.assertRaises(ValueError):
                 self.console.save(self.output, 'logo', encoded, label)
 
+    def test_console_spine_mixed_formats_primary_delete_undo_and_game_independence(self):
+        from artwork_actions import change_console
+        from console_artwork import valid_filename
+        game_spine = self.output/'GAME-ID/spine.webp'
+        game_spine.write_bytes(b'game-specific spine untouched')
+        primary = encode_import(self.image, encoding='avif')
+        primary['sources'] = [{'source': 'Original console spine template'}]
+        self.console.save(self.output, 'spine', primary, create_only=True)
+        Image.new('RGB', (16, 70), 'red').save(self.image)
+        variant = encode_import(self.image, encoding='webp')
+        self.assertEqual(self.console.next_label(self.output, 'spine'), 'spine2')
+        self.console.save(self.output, 'spine', variant, 'spine2', create_only=True)
+        images = self.console.images(self.output)
+        self.assertEqual(images['spine']['path'], 'spine.avif')
+        self.assertEqual(images['spine']['format'], 'AVIF')
+        self.assertEqual(images['spine']['compression']['quality'], 60)
+        self.assertEqual(images['spine2']['kind'], 'spine')
+        self.assertEqual(images['spine2']['format'], 'WEBP')
+        change_console(self.console, self.output, 'spine2', 'primary')
+        self.assertEqual((self.output/'spine.webp').read_bytes(), variant['data'])
+        self.assertEqual((self.output/'spine2.avif').read_bytes(), primary['data'])
+        self.assertEqual(self.console.images(self.output)['spine2']['sources'], primary['sources'])
+        self.console.undo(self.output)
+        self.assertEqual((self.output/'spine.avif').read_bytes(), primary['data'])
+        self.assertEqual((self.output/'spine2.webp').read_bytes(), variant['data'])
+        change_console(self.console, self.output, 'spine', 'delete')
+        self.assertFalse((self.output/'spine.avif').exists())
+        self.assertNotIn('spine', self.console.images(self.output))
+        self.console.undo(self.output)
+        self.assertEqual((self.output/'spine.avif').read_bytes(), primary['data'])
+        self.assertEqual(game_spine.read_bytes(), b'game-specific spine untouched')
+        self.assertEqual((self.output/'catalog.json').read_bytes(), self.catalog)
+        record = json.loads((self.output/'console_artwork.json').read_text())['images']['spine']
+        self.assertEqual(record['kind'], 'spine')
+        self.assertEqual(record['path'], 'spine.avif')
+        with self.assertRaises(ValueError):
+            valid_filename('spine', 'spine.svg')
+
 
 if __name__ == '__main__':
     unittest.main()

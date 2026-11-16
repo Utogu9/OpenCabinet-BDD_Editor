@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.6.1
+
+- Add console-level `spine` artwork as a default template for games without their own spine or full cover, with AVIF/WebP imports, numbered variants, replacement, primary selection, deletion and undo.
+- Report the correct AVIF format for console artwork and update the English and Spanish documentation and interface labels.
+
 ## v1.6.0
 
 - Add `cover_full_material` for full-cover bump height, roughness and specular intensity. Import 8-bit RGBA PNG or lossless WebP and save lossless RGBA PNG, preserving hidden RGB values and original dimensions independently of the artwork encoding preference.

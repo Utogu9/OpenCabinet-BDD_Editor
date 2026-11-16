@@ -512,7 +512,7 @@ class Editor:
             messagebox.showerror(tr('Image type'), tr('Use lowercase letters, numbers and underscores, for example cover_back.'), parent=self.window)
             return
         if self.console_mode and kind not in CONSOLE_KINDS:
-            messagebox.showerror(tr('Console artwork type'), tr('Choose logo, render or screenshot.'), parent=self.window)
+            messagebox.showerror(tr('Console artwork type'), tr('Choose logo, render, screenshot or spine.'), parent=self.window)
             return
         if self.serial or self.console_mode:
             self.import_image(kind, self.next_label(kind), create_only=True)

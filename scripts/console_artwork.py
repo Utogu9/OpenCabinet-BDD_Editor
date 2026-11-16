@@ -10,7 +10,7 @@ from editor_store import ArtworkStore, atomic_bytes, inside, json_bytes, stamp
 from editor_common import digest
 
 CONSOLE_KINDS = {'logo': 'Console logo', 'render': 'Console render',
-                 'screenshot': 'Console screenshot'}
+                 'screenshot': 'Console screenshot', 'spine': 'Console spine'}
 
 
 def label_kind(label):
@@ -65,7 +65,7 @@ class ConsoleArtwork:
                 else:
                     with Image.open(BytesIO(path.read_bytes())) as image:
                         width, height = image.size
-                result[label] = {**record, 'path': path.name, 'kind': kind, 'format': 'SVG' if path.suffix == '.svg' else 'WEBP',
+                result[label] = {**record, 'path': path.name, 'kind': kind, 'format': {'.svg': 'SVG', '.avif': 'AVIF', '.webp': 'WEBP'}[path.suffix],
                                 'width': width, 'height': height, 'bytes': path.stat().st_size}
         return result
 
@@ -121,7 +121,7 @@ class ConsoleArtwork:
         if label_kind(label) != kind:
             raise ValueError(tr('Invalid console artwork path.'))
         if kind not in CONSOLE_KINDS or encoded.get('format') in {'PDF', 'CBZ'} or (encoded.get('format') == 'SVG' and kind != 'logo'):
-            raise ValueError(tr('Console artwork supports logo, render and screenshot in WebP'))
+            raise ValueError(tr('Console artwork supports logo, render, screenshot and spine in AVIF or WebP; SVG is supported for logos only.'))
         with self.store.writer():
             output, metadata, history_path, pending = self.paths(output)
             self.recover(pending)
